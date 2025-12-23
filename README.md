@@ -150,42 +150,6 @@ const observer = new PerformanceObserver((list) => {
 observer.observe({ type: 'scroll', buffered: true });
 ```
 
-## Aggregating Scroll Metrics
-
-```javascript
-class ScrollMetricsCollector {
-  constructor() {
-    this.scrollEntries = [];
-    this.observer = new PerformanceObserver((list) => {
-      this.scrollEntries.push(...list.getEntries());
-    });
-    this.observer.observe({ type: 'scroll', buffered: true });
-  }
-
-  getAggregateMetrics() {
-    if (this.scrollEntries.length === 0) return null;
-    
-    const totalFramesExpected = this.scrollEntries.reduce((sum, e) => sum + e.framesExpected, 0);
-    const totalFramesProduced = this.scrollEntries.reduce((sum, e) => sum + e.framesProduced, 0);
-    const totalCheckerboardTime = this.scrollEntries.reduce((sum, e) => sum + e.checkerboardTime, 0);
-    
-    return {
-      scrollCount: this.scrollEntries.length,
-      averageDuration: this.scrollEntries.reduce((sum, e) => sum + e.duration, 0) / this.scrollEntries.length,
-      overallSmoothness: totalFramesProduced / totalFramesExpected,
-      totalCheckerboardTime,
-      p75Smoothness: this.percentile(this.scrollEntries.map(e => e.smoothnessScore), 75)
-    };
-  }
-
-  percentile(arr, p) {
-    const sorted = arr.slice().sort((a, b) => a - b);
-    const index = Math.ceil((p / 100) * sorted.length) - 1;
-    return sorted[index];
-  }
-}
-```
-
 # Polyfill
 A polyfill implementation is provided to demonstrate the API usage patterns and enable experimentation before native browser support is available.
 
