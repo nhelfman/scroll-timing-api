@@ -240,6 +240,23 @@
     .btn:hover { background: color-mix(in oklab, var(--panel) 82%, transparent); }
     .btn:active { transform: translateY(1px); }
 
+    .btn:disabled,
+    .btn[disabled] {
+      cursor: not-allowed;
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    .btn:disabled:hover,
+    .btn[disabled]:hover {
+      background: color-mix(in oklab, var(--panel) 72%, transparent);
+    }
+
+    .btn:disabled:active,
+    .btn[disabled]:active {
+      transform: none;
+    }
+
     .btn.primary {
       border-color: color-mix(in oklab, var(--accent) 55%, var(--border2));
       background: color-mix(in oklab, var(--accent) 18%, var(--panel));
@@ -315,6 +332,24 @@
       border-radius: 999px;
       padding: 6px 10px;
       font-family: var(--mono);
+    }
+
+    .pill.good {
+      border-color: color-mix(in oklab, var(--good) 55%, var(--border2));
+      background: color-mix(in oklab, var(--good) 16%, var(--panel));
+      color: color-mix(in oklab, var(--text) 92%, var(--good));
+    }
+
+    .pill.warn {
+      border-color: color-mix(in oklab, var(--warn) 55%, var(--border2));
+      background: color-mix(in oklab, var(--warn) 14%, var(--panel));
+      color: color-mix(in oklab, var(--text) 92%, var(--warn));
+    }
+
+    .pill.bad {
+      border-color: color-mix(in oklab, var(--bad) 55%, var(--border2));
+      background: color-mix(in oklab, var(--bad) 14%, var(--panel));
+      color: color-mix(in oklab, var(--text) 92%, var(--bad));
     }
 
     .pill strong { color: var(--text); font-weight: 650; }
@@ -524,7 +559,10 @@
     <aside class="panel sticky" aria-label="Controls and metrics">
       <div class="panel-header">
         <h2>Live Metrics</h2>
-        <span class="pill"><strong>Entries</strong> <span id="entryCount">0</span></span>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+          <span class="pill" id="observePill" aria-live="polite"><strong>Status</strong> <span id="observeStatus">Not observing</span></span>
+          <span class="pill"><strong>Entries</strong> <span id="entryCount">0</span></span>
+        </div>
       </div>
       <div class="panel-body">
         <div class="kvs grid-2" style="margin-bottom: 10px;">
@@ -549,7 +587,7 @@
         <div class="controls">
           <div class="row">
             <button class="btn primary" id="startBtn" type="button">Start observing</button>
-            <button class="btn" id="stopBtn" type="button" disabled>Stop</button>
+            <button class="btn" id="stopBtn" type="button" disabled>Stop observing</button>
             <button class="btn danger" id="clearBtn" type="button" disabled>Clear</button>
           </div>
 
@@ -708,6 +746,8 @@
         implText: document.getElementById('implText'),
         progress: document.getElementById('scrollProgress'),
         entryCount: document.getElementById('entryCount'),
+        observePill: document.getElementById('observePill'),
+        observeStatus: document.getElementById('observeStatus'),
         avgDuration: document.getElementById('avgDuration'),
         avgSmoothness: document.getElementById('avgSmoothness'),
         p75Smoothness: document.getElementById('p75Smoothness'),
@@ -829,13 +869,42 @@
 
       let observer = null;
       let entries = [];
+      let observeState = 'idle'; // 'idle' | 'observing' | 'error'
+
+      function setObserveStatus(kind) {
+        if (!els.observeStatus || !els.observePill) return;
+
+        const pill = els.observePill;
+        pill.classList.remove('good', 'warn', 'bad');
+
+        if (kind === 'observing') {
+          els.observeStatus.textContent = 'Observing';
+          pill.classList.add('good');
+          return;
+        }
+
+        if (kind === 'error') {
+          els.observeStatus.textContent = 'Error';
+          pill.classList.add('bad');
+          return;
+        }
+
+        // Default: not observing.
+        els.observeStatus.textContent = 'Not observing';
+        pill.classList.add('warn');
+      }
 
       function setControlsState() {
-        const observing = !!observer;
+        const observing = observeState === 'observing' && !!observer;
         els.startBtn.disabled = observing;
         els.stopBtn.disabled = !observing;
         els.clearBtn.disabled = entries.length === 0;
         els.exportBtn.disabled = entries.length === 0;
+
+        // Make state visible even at a glance.
+        els.startBtn.textContent = observing ? 'Observing…' : 'Start observing';
+        if (observeState === 'error') setObserveStatus('error');
+        else setObserveStatus(observing ? 'observing' : 'idle');
       }
 
       function updateStats() {
@@ -919,8 +988,11 @@
         try {
           observer = new PerformanceObserver(onEntries);
           observer.observe({ type: 'scroll', buffered: true });
+          observeState = 'observing';
         } catch (err) {
           observer = null;
+          observeState = 'error';
+          setControlsState();
           alert('Could not start observing scroll entries in this browser. Open the console for details.');
           console.error(err);
           return;
@@ -935,6 +1007,7 @@
           observer.disconnect();
         } finally {
           observer = null;
+          observeState = 'idle';
           setControlsState();
         }
       }
