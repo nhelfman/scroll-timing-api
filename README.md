@@ -6,13 +6,13 @@ Scroll is a very common user interaction in many web apps used for navigating co
 
 Measuring scroll performance is critical because:
 
-1. **User Experience Impact**: Scroll jank and stuttering are immediately perceptible to users and significantly degrade the browsing experience. Studies show that users associate smooth scrolling with overall site quality and trustworthiness.
+1. **User Experience Impact**: Scroll jank and stuttering are immediately perceptible to users and significantly degrade the browsing experience. Smooth, responsive scrolling is associated with higher perceived quality and user engagement.
 
 2. **Lack of Standardized Metrics**: Currently, developers rely on ad-hoc solutions like `requestAnimationFrame` loops or `IntersectionObserver` hacks to approximate scroll performance, leading to inconsistent measurements across sites and tools.
 
 3. **Real User Monitoring (RUM)**: A standard API enables collecting scroll performance data from real users in production, allowing developers to identify performance issues that may not appear in lab testing.
 
-4. **Correlation with Business Metrics**: Poor scroll performance has been shown to correlate with reduced user engagement, lower time-on-page, and decreased conversion rates, especially on content-heavy sites.
+4. **Correlation with Business Metrics**: Poor scroll performance can correlate with reduced user engagement and lower time-on-page, and may impact conversion rates, especially on content-heavy sites (typically validated via RUM analysis and/or A/B tests).
 
 5. **Framework and Library Support**: A standardized API allows UI frameworks, virtual scrolling libraries, and performance monitoring tools to provide consistent scroll performance insights.
 
