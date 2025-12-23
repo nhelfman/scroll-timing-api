@@ -629,6 +629,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th style="width: 50px;">#</th>
                     <th style="width: 110px;">smooth</th>
                     <th style="width: 88px;">duration</th>
                     <th style="width: 84px;">dropped</th>
@@ -637,7 +638,7 @@
                   </tr>
                 </thead>
                 <tbody id="logBody">
-                  <tr><td colspan="5" style="color: var(--muted); font-family: var(--sans);">Start observing, then scroll this page.</td></tr>
+                  <tr><td colspan="6" style="color: var(--muted); font-family: var(--sans);">Start observing, then scroll this page.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -937,11 +938,12 @@
 
       function renderLog() {
         if (!entries.length) {
-          els.logBody.innerHTML = '<tr><td colspan="5" style="color: var(--muted); font-family: var(--sans);">No entries yet. Start observing, then scroll.</td></tr>';
+          els.logBody.innerHTML = '<tr><td colspan="6" style="color: var(--muted); font-family: var(--sans);">No entries yet. Start observing, then scroll.</td></tr>';
           return;
         }
 
-        const rows = entries.slice().reverse().map((e) => {
+        const rows = entries.slice().reverse().map((e, i) => {
+          const seq = entries.length - i;
           const cls = scoreClass(e.smoothnessScore);
           const dotClass = cls === 'good' ? '' : (cls === 'warn' ? 'warn' : 'bad');
           const scoreTxt = fmtPct01(e.smoothnessScore);
@@ -952,6 +954,7 @@
 
           return `
             <tr>
+              <td style="color: var(--muted);">${seq}</td>
               <td><span class="score"><span class="dot ${dotClass}"></span>${scoreTxt}</span></td>
               <td>${durTxt}</td>
               <td>${droppedTxt}</td>
