@@ -262,6 +262,44 @@
       background: color-mix(in oklab, var(--accent) 18%, var(--panel));
     }
 
+    @keyframes start-observing-attn {
+      0% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 30%, transparent);
+        background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+      }
+      35% {
+        transform: translateY(-1px) scale(1.02);
+        box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 18%, transparent);
+        background: color-mix(in oklab, var(--accent) 28%, var(--panel));
+      }
+      70% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent);
+        background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+      }
+      100% {
+        transform: translateY(0) scale(1);
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 0%, transparent);
+        background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+      }
+    }
+
+    .btn.attn {
+      animation: start-observing-attn 1.15s ease-in-out 0.15s 2;
+      will-change: transform;
+      outline: 2px solid color-mix(in oklab, var(--accent) 35%, transparent);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn.attn {
+        animation: none;
+        box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 16%, transparent);
+        background: color-mix(in oklab, var(--accent) 24%, var(--panel));
+      }
+    }
+
     .btn.danger {
       border-color: color-mix(in oklab, var(--bad) 55%, var(--border2));
       background: color-mix(in oklab, var(--bad) 14%, var(--panel));
@@ -872,6 +910,35 @@
       let entries = [];
       let observeState = 'idle'; // 'idle' | 'observing' | 'error'
 
+      let startBtnAttnTimeout = null;
+
+      function stopStartBtnAttention() {
+        if (!els.startBtn) return;
+        els.startBtn.classList.remove('attn');
+        if (startBtnAttnTimeout) {
+          clearTimeout(startBtnAttnTimeout);
+          startBtnAttnTimeout = null;
+        }
+      }
+
+      function maybeBlinkStartButtonOnLoad() {
+        if (!els.startBtn) return;
+        // Only draw attention when user can actually start observing.
+        if (observeState !== 'idle') return;
+        if (els.startBtn.disabled) return;
+
+        // Ensure the first paint happens before animating.
+        requestAnimationFrame(() => {
+          // Force-restart if something reuses the same DOM.
+          els.startBtn.classList.remove('attn');
+          // Force style recalculation so re-adding retriggers the animation.
+          void els.startBtn.offsetWidth;
+          els.startBtn.classList.add('attn');
+          // Remove the class so re-adding later would re-trigger if needed.
+          startBtnAttnTimeout = setTimeout(stopStartBtnAttention, 1000);
+        });
+      }
+
       function setObserveStatus(kind) {
         if (!els.observeStatus || !els.observePill) return;
 
@@ -988,6 +1055,8 @@
       function startObserving() {
         if (observer) return;
 
+        stopStartBtnAttention();
+
         try {
           observer = new PerformanceObserver(onEntries);
           observer.observe({ type: 'scroll', buffered: true });
@@ -1095,6 +1164,9 @@
       updateStats();
       renderLog();
       setControlsState();
+
+      // Draw attention to “Start observing” for first-time users.
+      maybeBlinkStartButtonOnLoad();
     })();
   </script>
 </body>
