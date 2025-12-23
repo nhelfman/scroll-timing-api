@@ -219,3 +219,32 @@ This decision affects the API design and should be resolved before standardizati
 - Or for lab testing where cross-device comparison is critical?
 - Should there be separate metrics for both approaches?
 - Could `framesExpected` include the target refresh rate as context?
+
+### Related Concern: Dynamic Refresh Rates
+
+In addition to choosing between a standardized baseline or device refresh rate, there's a related consideration: **refresh rates are not static throughout a page's lifetime**.
+
+**Variable Refresh Rate (VRR) displays:**
+- Technologies like Adaptive Sync, FreeSync, and G-Sync allow displays to dynamically adjust refresh rates (typically 48-240Hz)
+- Refresh rate varies based on content, power state, GPU load, and application demands
+- Increasingly common in gaming laptops, high-end monitors, and mobile devices
+
+**Dynamic browser throttling:**
+- Opening/closing DevTools often changes rendering rate (e.g., 60fps → 32fps)
+- Tab backgrounding reduces to ~1fps or lower
+- Battery saver modes and power state changes affect rendering pipeline timing
+- Performance settings can be changed by users mid-session
+
+**Impact on API design:**
+
+If the API uses Option B (device actual refresh rate), how should it handle changes mid-session?
+- Should each `PerformanceScrollTiming` entry snapshot the refresh rate at scroll start?
+- Should browsers continuously track refresh rate changes during a scroll interaction?
+- If a fixed baseline is measured once, it becomes stale when throttling changes (leading to incorrect `framesExpected` and false jank reports)
+
+Alternatively, does this complexity make Option A (standardized 60fps baseline) more attractive, since it avoids the dynamic measurement problem entirely?
+
+**Considerations for implementation:**
+- Native browser implementations have direct access to compositor and display information, making refresh rate tracking more feasible than JavaScript-based measurement
+- However, the API specification should still be explicit about whether and when refresh rate is determined
+- This concern may influence whether Option A or Option B is ultimately chosen
