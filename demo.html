@@ -1,370 +1,975 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scroll Timing API Demo</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scroll Timing API — Demo</title>
   <style>
-    * {
-      box-sizing: border-box;
+    :root {
+      color-scheme: light dark;
+      --bg: #0b0d12;
+      --panel: #121725;
+      --panel2: #0f1320;
+      --text: #e7e9ee;
+      --muted: #a7afc3;
+      --border: rgba(255,255,255,.10);
+      --border2: rgba(255,255,255,.14);
+      --accent: #6ea8ff;
+      --good: #5fe1b6;
+      --warn: #ffd36e;
+      --bad: #ff7d7d;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
     }
 
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f7fb;
+        --panel: #ffffff;
+        --panel2: #fbfcff;
+        --text: #121524;
+        --muted: #495166;
+        --border: rgba(0,0,0,.10);
+        --border2: rgba(0,0,0,.14);
+        --shadow: 0 12px 28px rgba(16,24,40,.12);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
-      padding: 0;
-      background: #f5f5f5;
+      font-family: var(--sans);
+      color: var(--text);
+      padding-top: var(--topbar-h, 76px);
+      background: radial-gradient(1200px 600px at 20% -10%, rgba(110,168,255,.25), transparent 60%),
+                  radial-gradient(900px 500px at 80% 0%, rgba(95,225,182,.18), transparent 55%),
+                  var(--bg);
     }
 
-    .metrics-panel {
+    .topbar {
       position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 320px;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      padding: 20px;
-      z-index: 1000;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      backdrop-filter: blur(10px);
+      background: color-mix(in oklab, var(--bg) 82%, transparent);
+      border-bottom: 1px solid var(--border);
     }
 
-    .metrics-panel h2 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
-      color: #333;
-      border-bottom: 2px solid #4CAF50;
-      padding-bottom: 8px;
+    .topbar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 14px 16px 12px;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
     }
 
-    .metric {
+    .brand {
       display: flex;
+      align-items: baseline;
       justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #eee;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
-    .metric:last-child {
-      border-bottom: none;
+    .brand h1 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: .2px;
+      font-weight: 650;
     }
 
-    .metric-label {
-      color: #666;
-      font-size: 14px;
+    .brand .subtitle {
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.2;
     }
 
-    .metric-value {
-      font-weight: 600;
-      font-size: 14px;
-      color: #333;
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--panel) 65%, transparent);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
     }
 
-    .metric-value.good {
-      color: #4CAF50;
+    .progress > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 35%, var(--good)));
     }
 
-    .metric-value.warning {
-      color: #FF9800;
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 18px 16px 64px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
     }
 
-    .metric-value.poor {
-      color: #f44336;
+    @media (min-width: 980px) {
+      .wrap {
+        grid-template-columns: 420px 1fr;
+        align-items: start;
+      }
     }
 
-    .scroll-history {
-      margin-top: 16px;
-      max-height: 200px;
-      overflow-y: auto;
+    .panel {
+      background: linear-gradient(180deg, color-mix(in oklab, var(--panel) 92%, transparent), var(--panel2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: clip;
     }
 
-    .scroll-history h3 {
-      margin: 0 0 8px 0;
-      font-size: 14px;
-      color: #666;
+    .panel-header {
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
-    .scroll-entry {
-      background: #f9f9f9;
-      padding: 8px 12px;
-      border-radius: 6px;
-      margin-bottom: 8px;
+    .panel-header h2 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: .2px;
+    }
+
+    .panel-body {
+      padding: 14px;
+    }
+
+    .kvs {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .kv {
+      padding: 10px;
+      border-radius: 12px;
+      background: color-mix(in oklab, var(--panel) 70%, transparent);
+      border: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+    }
+
+    .kv .label {
+      color: var(--muted);
       font-size: 12px;
     }
 
-    .scroll-entry .source {
+    .kv .value {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+
+    .grid-2 {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 520px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .row > * { flex: 0 0 auto; }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border2);
+      background: color-mix(in oklab, var(--panel) 72%, transparent);
+      color: var(--text);
+      padding: 9px 10px;
+      border-radius: 12px;
+      font-size: 12.5px;
       font-weight: 600;
-      color: #2196F3;
+      cursor: pointer;
+      transition: transform .06s ease, background .12s ease;
+    }
+
+    .btn:hover { background: color-mix(in oklab, var(--panel) 82%, transparent); }
+    .btn:active { transform: translateY(1px); }
+
+    .btn.primary {
+      border-color: color-mix(in oklab, var(--accent) 55%, var(--border2));
+      background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+    }
+
+    .btn.danger {
+      border-color: color-mix(in oklab, var(--bad) 55%, var(--border2));
+      background: color-mix(in oklab, var(--bad) 14%, var(--panel));
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      user-select: none;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .toggle input {
+      width: 44px;
+      height: 26px;
+      appearance: none;
+      border-radius: 999px;
+      border: 1px solid var(--border2);
+      background: color-mix(in oklab, var(--panel) 80%, transparent);
+      position: relative;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .toggle input::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: color-mix(in oklab, var(--text) 82%, transparent);
+      transition: left .12s ease, background .12s ease;
+    }
+
+    .toggle input:checked {
+      border-color: color-mix(in oklab, var(--accent) 55%, var(--border2));
+      background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+    }
+
+    .toggle input:checked::after {
+      left: 21px;
+      background: color-mix(in oklab, var(--accent) 70%, white);
+    }
+
+    .range {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    input[type="range"] { width: 100%; }
+
+    .pill {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--panel) 70%, transparent);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-family: var(--mono);
+    }
+
+    .pill strong { color: var(--text); font-weight: 650; }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.35;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      font-family: var(--mono);
+    }
+
+    th {
+      font-family: var(--sans);
+      font-size: 12px;
+      letter-spacing: .15px;
+      color: var(--muted);
+      font-weight: 650;
+      position: sticky;
+      top: 0;
+      background: color-mix(in oklab, var(--panel) 88%, transparent);
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+
+    .score {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--good);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--good) 18%, transparent);
+    }
+
+    .dot.warn {
+      background: var(--warn);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--warn) 22%, transparent);
+    }
+
+    .dot.bad {
+      background: var(--bad);
+      box-shadow: 0 0 0 3px color-mix(in oklab, var(--bad) 22%, transparent);
+    }
+
+    .log {
+      max-height: 420px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
     }
 
     .content {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 40px 20px 40px 20px;
+      padding: 18px;
     }
 
-    .content h1 {
-      color: #333;
-      margin-bottom: 20px;
+    .hero {
+      padding: 22px 18px 10px;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(900px 400px at 10% 0%, rgba(110,168,255,.18), transparent 55%),
+        radial-gradient(700px 420px at 90% 0%, rgba(95,225,182,.12), transparent 58%),
+        color-mix(in oklab, var(--panel) 80%, transparent);
     }
 
-    .content p {
-      color: #555;
-      line-height: 1.8;
-      margin-bottom: 20px;
+    .hero h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: .2px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13.5px;
+      max-width: 70ch;
+    }
+
+    .cards {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+      margin-top: 14px;
+    }
+
+    @media (min-width: 700px) {
+      .cards { grid-template-columns: 1fr 1fr; }
     }
 
     .card {
-      background: white;
-      border-radius: 12px;
-      padding: 30px;
-      margin-bottom: 30px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: color-mix(in oklab, var(--panel) 85%, transparent);
+      padding: 14px;
     }
 
-    .card h2 {
-      color: #333;
-      margin-top: 0;
+    .card h3 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: .15px;
     }
 
-    .placeholder-image {
-      width: 100%;
-      height: 200px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 24px;
-      margin: 20px 0;
-    }
-
-    .instructions {
-      background: #e3f2fd;
-      border-left: 4px solid #2196F3;
-      padding: 16px 20px;
-      margin-bottom: 30px;
-      border-radius: 0 8px 8px 0;
-    }
-
-    .instructions h3 {
-      margin: 0 0 8px 0;
-      color: #1565C0;
-    }
-
-    .instructions p {
+    .card p {
       margin: 0;
-      color: #1976D2;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
     }
 
-    footer {
-      text-align: center;
-      padding: 40px;
-      color: #999;
+    .spacer {
+      height: 16px;
     }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: color-mix(in oklab, var(--panel) 82%, transparent);
+      overflow: clip;
+      margin-top: 14px;
+    }
+
+    .section .head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .section .head .title {
+      font-weight: 650;
+      font-size: 13px;
+    }
+
+    .section .head .meta {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .section .body {
+      padding: 14px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .sticky {
+      position: sticky;
+      top: calc(var(--topbar-h, 76px) + 12px);
+    }
+
+    @media (max-width: 979px) {
+      .sticky { position: static; }
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 12.5px;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
+
+  <script src="polyfill.js"></script>
 </head>
 <body>
-  <!-- Metrics Panel -->
-  <div class="metrics-panel">
-    <h2>📊 Scroll Metrics</h2>
-    
-    <div class="metric">
-      <span class="metric-label">Total Scrolls</span>
-      <span class="metric-value" id="scroll-count">0</span>
-    </div>
-    
-    <div class="metric">
-      <span class="metric-label">Last Duration</span>
-      <span class="metric-value" id="last-duration">-</span>
-    </div>
-    
-    <div class="metric">
-      <span class="metric-label">Last Smoothness</span>
-      <span class="metric-value" id="last-smoothness">-</span>
-    </div>
-    
-    <div class="metric">
-      <span class="metric-label">Frames Dropped</span>
-      <span class="metric-value" id="frames-dropped">-</span>
-    </div>
-    
-    <div class="metric">
-      <span class="metric-label">Avg Smoothness</span>
-      <span class="metric-value" id="avg-smoothness">-</span>
-    </div>
-
-    <div class="scroll-history">
-      <h3>Recent Scroll Events</h3>
-      <div id="history-container"></div>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div>
+          <h1>Scroll Timing API — Demo</h1>
+          <div class="subtitle">Measure scroll smoothness & dropped frames via <span style="font-family: var(--mono)">PerformanceObserver</span>.</div>
+        </div>
+        <div class="pill" id="implPill" aria-live="polite">
+          <strong>API</strong>
+          <span id="implText">Loading…</span>
+        </div>
+      </div>
+      <div class="progress" aria-label="Scroll progress"><div id="scrollProgress"></div></div>
     </div>
   </div>
 
-  <!-- Scrollable Content -->
-  <div class="content">
-    <h1>Scroll Timing API Demo</h1>
-    
-    <div class="instructions">
-      <h3>👋 Try scrolling!</h3>
-      <p>Scroll this page using mouse wheel, touch, or keyboard to see real-time scroll performance metrics in the panel on the right.</p>
-    </div>
+  <div class="wrap">
+    <aside class="panel sticky" aria-label="Controls and metrics">
+      <div class="panel-header">
+        <h2>Live Metrics</h2>
+        <span class="pill"><strong>Entries</strong> <span id="entryCount">0</span></span>
+      </div>
+      <div class="panel-body">
+        <div class="kvs grid-2" style="margin-bottom: 10px;">
+          <div class="kv">
+            <div class="label">Avg duration</div>
+            <div class="value" id="avgDuration">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">Avg smoothness</div>
+            <div class="value" id="avgSmoothness">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">P75 smoothness</div>
+            <div class="value" id="p75Smoothness">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">Dropped frames (sum)</div>
+            <div class="value" id="sumDropped">—</div>
+          </div>
+        </div>
 
-    <div class="card">
-      <h2>What is the Scroll Timing API?</h2>
-      <p>The Scroll Timing API is a proposed performance API that helps developers measure scroll performance metrics in a standardized way. It provides insights into scroll responsiveness, smoothness, and visual completeness.</p>
-      <div class="placeholder-image">📜 Scroll Performance</div>
-      <p>This demo uses a polyfill to demonstrate how the API works. The metrics panel shows real-time data collected during your scroll interactions.</p>
-    </div>
+        <div class="controls">
+          <div class="row">
+            <button class="btn primary" id="startBtn" type="button">Start observing</button>
+            <button class="btn" id="stopBtn" type="button" disabled>Stop</button>
+            <button class="btn danger" id="clearBtn" type="button" disabled>Clear</button>
+          </div>
 
-    <div class="card">
-      <h2>Key Metrics Explained</h2>
-      <p><strong>Duration:</strong> How long the scroll interaction lasted, from the first input to when the viewport settled.</p>
-      <p><strong>Smoothness Score:</strong> A percentage indicating how many expected frames were actually rendered. 100% means perfect smoothness with no dropped frames.</p>
-      <p><strong>Frames Dropped:</strong> The number of frames that were skipped during scrolling, causing visible jank.</p>
-      <div class="placeholder-image">📈 Metrics</div>
-    </div>
+          <div class="row">
+            <button class="btn" id="scrollTopBtn" type="button">Scroll to top</button>
+            <button class="btn" id="smoothScrollBtn" type="button">Smooth scroll ↓</button>
+            <button class="btn" id="exportBtn" type="button" disabled>Export JSON</button>
+          </div>
 
-    <div class="card">
-      <h2>Why Measure Scroll Performance?</h2>
-      <p>Scroll jank is one of the most noticeable performance issues for users. It directly impacts perceived quality and user satisfaction.</p>
-      <p>By measuring scroll performance, developers can:</p>
-      <ul>
-        <li>Identify performance regressions before they affect users</li>
-        <li>Set performance budgets for scroll smoothness</li>
-        <li>Compare scroll performance across different devices</li>
-        <li>Correlate scroll metrics with user engagement</li>
-      </ul>
-      <div class="placeholder-image">🎯 Goals</div>
-    </div>
+          <label class="toggle">
+            <input id="consoleToggle" type="checkbox" />
+            Log entries to console
+          </label>
 
-    <div class="card">
-      <h2>Using the API</h2>
-      <p>The Scroll Timing API follows the familiar PerformanceObserver pattern:</p>
-      <pre style="background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto;"><code>const observer = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) {
-    console.log('Smoothness:', entry.smoothnessScore);
-    console.log('Duration:', entry.duration);
-  }
-});
+          <label class="toggle">
+            <input id="jankToggle" type="checkbox" />
+            Simulate jank on scroll
+          </label>
 
-observer.observe({ type: 'scroll', buffered: true });</code></pre>
-      <div class="placeholder-image">💻 Code</div>
-    </div>
+          <div class="range" aria-label="Jank intensity">
+            <input id="jankMs" type="range" min="0" max="30" value="12" />
+            <span class="pill"><strong>Busy</strong> <span id="jankMsLabel">12</span>ms</span>
+          </div>
 
-    <div class="card">
-      <h2>More Content to Scroll</h2>
-      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
-      <div class="placeholder-image">🖼️ Image 1</div>
-      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
-      <div class="placeholder-image">🖼️ Image 2</div>
-      <p>Sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
-    </div>
+          <div class="hint">
+            Tip: enable “Simulate jank”, then scroll quickly. The polyfill estimates <span style="font-family: var(--mono)">framesExpected</span> vs <span style="font-family: var(--mono)">framesProduced</span> using rAF timing.
+          </div>
+        </div>
 
-    <div class="card">
-      <h2>Even More Content</h2>
-      <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
-      <div class="placeholder-image">🖼️ Image 3</div>
-      <p>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
-      <div class="placeholder-image">🖼️ Image 4</div>
-    </div>
+        <div class="spacer"></div>
 
-    <div class="card">
-      <h2>Final Section</h2>
-      <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur?</p>
-      <div class="placeholder-image">🏁 End</div>
-      <p>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
-    </div>
+        <div class="panel" style="box-shadow:none;">
+          <div class="panel-header">
+            <h2>Latest Entries</h2>
+            <span class="pill"><strong>Max</strong> 50</span>
+          </div>
+          <div class="panel-body" style="padding: 12px;">
+            <div class="log" role="region" aria-label="Scroll entries log">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 110px;">smooth</th>
+                    <th style="width: 88px;">duration</th>
+                    <th style="width: 84px;">dropped</th>
+                    <th style="width: 90px;">source</th>
+                    <th>details</th>
+                  </tr>
+                </thead>
+                <tbody id="logBody">
+                  <tr><td colspan="5" style="color: var(--muted); font-family: var(--sans);">Start observing, then scroll this page.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="footer-note">
+              Entries are produced after scrolling stops (≈150ms idle in the polyfill).
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
 
-    <footer>
-      <p>Scroll Timing API Demo • Scroll back to the top to see more metrics!</p>
-    </footer>
+    <main class="panel" aria-label="Scrollable content">
+      <div class="hero">
+        <h2>Scroll like a user; measure like a tool</h2>
+        <p>
+          This page is intentionally tall. While you scroll, the polyfill emits <span style="font-family: var(--mono)">PerformanceScrollTiming</span>
+          entries. The left panel summarizes smoothness and frame drops.
+        </p>
+        <div class="cards">
+          <div class="card">
+            <h3>What you’re seeing</h3>
+            <p>
+              Each entry tracks a scroll interaction: <span style="font-family: var(--mono)">startTime</span>, <span style="font-family: var(--mono)">duration</span>,
+              expected frames (at 60Hz), produced frames (rAF callbacks), and a smoothness score.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Try this</h3>
+            <p>
+              Turn on “Simulate jank”, then do a fast wheel scroll. You should see smoothness drop and dropped frames increase.
+              Disable it to compare.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="content" id="content">
+        <div class="section">
+          <div class="head">
+            <div class="title">Section 1 — Warm-up</div>
+            <div class="meta">Short scroll, quick entry</div>
+          </div>
+          <div class="body">
+            Scroll a bit to generate a baseline entry. Then enable jank and repeat.
+            This demo is designed to exercise the repo’s polyfill API shape rather than perfectly emulate browser internals.
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="head">
+            <div class="title">Section 2 — Content blocks</div>
+            <div class="meta">Layout + paint work</div>
+          </div>
+          <div class="body" id="blockContainer"></div>
+        </div>
+
+        <div class="section">
+          <div class="head">
+            <div class="title">Section 3 — Mixed text</div>
+            <div class="meta">A little more reading</div>
+          </div>
+          <div class="body">
+            <p style="margin: 0 0 10px;">
+              A good scroll metric needs to be comparable across pages. This demo keeps the content simple so you can focus on
+              how timing entries are emitted and aggregated.
+            </p>
+            <p style="margin: 0;">
+              If you’re building RUM, you’d typically observe entries and send summaries (p50/p75/p95 smoothness) along with context.
+            </p>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="head">
+            <div class="title">Section 4 — The bottom</div>
+            <div class="meta">Done</div>
+          </div>
+          <div class="body">
+            You made it. Hit “Scroll to top” and repeat a few runs.
+            If you want to compare sources, use mouse wheel vs touchpad vs keyboard.
+          </div>
+        </div>
+
+        <div class="footer-note">
+          Demo is fully self-contained and loads <a href="polyfill.js">polyfill.js</a>.
+        </div>
+      </div>
+    </main>
   </div>
 
-  <!-- Load the polyfill -->
-  <script src="polyfill.js"></script>
-  
-  <!-- Demo script -->
   <script>
-    // Track all scroll entries
-    const scrollEntries = [];
-    
-    // DOM elements
-    const scrollCountEl = document.getElementById('scroll-count');
-    const lastDurationEl = document.getElementById('last-duration');
-    const lastSmoothnessEl = document.getElementById('last-smoothness');
-    const framesDroppedEl = document.getElementById('frames-dropped');
-    const avgSmoothnessEl = document.getElementById('avg-smoothness');
-    const historyContainer = document.getElementById('history-container');
+    (function() {
+      const MAX_ENTRIES = 50;
 
-    // Helper to format smoothness with color coding
-    function formatSmoothness(score) {
-      const percentage = (score * 100).toFixed(1);
-      return {
-        text: percentage + '%',
-        class: score >= 0.9 ? 'good' : score >= 0.6 ? 'warning' : 'poor'
+      const els = {
+        implText: document.getElementById('implText'),
+        progress: document.getElementById('scrollProgress'),
+        entryCount: document.getElementById('entryCount'),
+        avgDuration: document.getElementById('avgDuration'),
+        avgSmoothness: document.getElementById('avgSmoothness'),
+        p75Smoothness: document.getElementById('p75Smoothness'),
+        sumDropped: document.getElementById('sumDropped'),
+        logBody: document.getElementById('logBody'),
+
+        startBtn: document.getElementById('startBtn'),
+        stopBtn: document.getElementById('stopBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        exportBtn: document.getElementById('exportBtn'),
+        scrollTopBtn: document.getElementById('scrollTopBtn'),
+        smoothScrollBtn: document.getElementById('smoothScrollBtn'),
+
+        consoleToggle: document.getElementById('consoleToggle'),
+        jankToggle: document.getElementById('jankToggle'),
+        jankMs: document.getElementById('jankMs'),
+        jankMsLabel: document.getElementById('jankMsLabel'),
+
+        blockContainer: document.getElementById('blockContainer'),
       };
-    }
 
-    // Update the metrics panel
-    function updateMetrics(entry) {
-      scrollEntries.push(entry);
-      
-      // Update count
-      scrollCountEl.textContent = scrollEntries.length;
-      
-      // Update last duration
-      lastDurationEl.textContent = entry.duration.toFixed(0) + 'ms';
-      
-      // Update last smoothness
-      const smoothness = formatSmoothness(entry.smoothnessScore);
-      lastSmoothnessEl.textContent = smoothness.text;
-      lastSmoothnessEl.className = 'metric-value ' + smoothness.class;
-      
-      // Update frames dropped
-      framesDroppedEl.textContent = entry.framesDropped;
-      framesDroppedEl.className = 'metric-value ' + (entry.framesDropped === 0 ? 'good' : entry.framesDropped < 5 ? 'warning' : 'poor');
-      
-      // Calculate and update average smoothness
-      const avgScore = scrollEntries.reduce((sum, e) => sum + e.smoothnessScore, 0) / scrollEntries.length;
-      const avgSmoothness = formatSmoothness(avgScore);
-      avgSmoothnessEl.textContent = avgSmoothness.text;
-      avgSmoothnessEl.className = 'metric-value ' + avgSmoothness.class;
-      
-      // Add to history
-      addHistoryEntry(entry);
-    }
-
-    // Add entry to scroll history
-    function addHistoryEntry(entry) {
-      const entryEl = document.createElement('div');
-      entryEl.className = 'scroll-entry';
-      entryEl.innerHTML = `
-        <span class="source">${entry.scrollSource}</span> • 
-        ${entry.duration.toFixed(0)}ms • 
-        ${(entry.smoothnessScore * 100).toFixed(0)}% smooth • 
-        ${entry.framesDropped} dropped
-      `;
-      
-      // Insert at the top
-      historyContainer.insertBefore(entryEl, historyContainer.firstChild);
-      
-      // Keep only last 10 entries
-      while (historyContainer.children.length > 10) {
-        historyContainer.removeChild(historyContainer.lastChild);
+      function syncTopbarHeightVar() {
+        const topbar = document.querySelector('.topbar');
+        if (!topbar) return;
+        const height = Math.max(0, Math.round(topbar.getBoundingClientRect().height));
+        document.documentElement.style.setProperty('--topbar-h', `${height}px`);
       }
-    }
 
-    // Create the PerformanceObserver
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        console.log('Scroll Timing Entry:', entry.toJSON());
-        updateMetrics(entry);
+      syncTopbarHeightVar();
+      addEventListener('resize', syncTopbarHeightVar, { passive: true });
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
       }
-    });
 
-    // Start observing scroll timing entries
-    observer.observe({ type: 'scroll', buffered: true });
+      // Populate content blocks to make the page scrollable.
+      const blocks = [];
+      for (let i = 1; i <= 32; i++) {
+        blocks.push({
+          title: `Block ${i}`,
+          body: i % 3 === 0
+            ? 'A longer paragraph to vary paint and layout. Scroll performance issues are often caused by main-thread work (JS, layout, paint) competing with scrolling.'
+            : 'Shorter text block. Keep scrolling.'
+        });
+      }
+      els.blockContainer.innerHTML = blocks.map((b) => {
+        return `
+          <div style="border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 0 0 10px; background: color-mix(in oklab, var(--panel) 78%, transparent);">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+              <div style="font-weight:650; color: var(--text);">${escapeHtml(b.title)}</div>
+              <div style="font-family: var(--mono); font-size: 12px; color: var(--muted);">#${String(b.title).split(' ')[1]}</div>
+            </div>
+            <div style="margin-top: 6px;">${escapeHtml(b.body)}</div>
+          </div>
+        `;
+      }).join('');
 
-    console.log('Scroll Timing API Demo loaded. Start scrolling to see metrics!');
+      function fmtMs(n) {
+        if (!Number.isFinite(n)) return '—';
+        return `${n.toFixed(1)}ms`;
+      }
+
+      function fmtPct01(n) {
+        if (!Number.isFinite(n)) return '—';
+        return `${(n * 100).toFixed(1)}%`;
+      }
+
+      function percentile(values, p) {
+        if (!values.length) return NaN;
+        const sorted = values.slice().sort((a, b) => a - b);
+        const idx = Math.max(0, Math.ceil((p / 100) * sorted.length) - 1);
+        return sorted[idx];
+      }
+
+      function scoreClass(score) {
+        if (!Number.isFinite(score)) return 'bad';
+        if (score >= 0.9) return 'good';
+        if (score >= 0.75) return 'warn';
+        return 'bad';
+      }
+
+      function updateScrollProgress() {
+        const doc = document.documentElement;
+        const scrollTop = doc.scrollTop || document.body.scrollTop;
+        const max = Math.max(1, doc.scrollHeight - doc.clientHeight);
+        const pct = Math.min(1, Math.max(0, scrollTop / max));
+        els.progress.style.width = `${(pct * 100).toFixed(2)}%`;
+      }
+
+      updateScrollProgress();
+      addEventListener('scroll', updateScrollProgress, { passive: true });
+      addEventListener('resize', updateScrollProgress, { passive: true });
+
+      // Identify implementation (native vs polyfill) heuristically.
+      const implName = (window.PerformanceScrollTiming && window.PerformanceScrollTiming.name) ? window.PerformanceScrollTiming.name : 'missing';
+      els.implText.textContent = implName === 'PerformanceScrollTimingPolyfill'
+        ? 'polyfill.js (demo)'
+        : (window.PerformanceScrollTiming ? `native (${implName || 'unknown'})` : 'not available');
+
+      let observer = null;
+      let entries = [];
+
+      function setControlsState() {
+        const observing = !!observer;
+        els.startBtn.disabled = observing;
+        els.stopBtn.disabled = !observing;
+        els.clearBtn.disabled = entries.length === 0;
+        els.exportBtn.disabled = entries.length === 0;
+      }
+
+      function updateStats() {
+        els.entryCount.textContent = String(entries.length);
+        if (!entries.length) {
+          els.avgDuration.textContent = '—';
+          els.avgSmoothness.textContent = '—';
+          els.p75Smoothness.textContent = '—';
+          els.sumDropped.textContent = '—';
+          setControlsState();
+          return;
+        }
+
+        const durations = entries.map(e => e.duration).filter(Number.isFinite);
+        const smoothness = entries.map(e => e.smoothnessScore).filter(Number.isFinite);
+        const dropped = entries.map(e => e.framesDropped).filter(Number.isFinite);
+
+        const avgDur = durations.reduce((a, b) => a + b, 0) / Math.max(1, durations.length);
+        const avgSm = smoothness.reduce((a, b) => a + b, 0) / Math.max(1, smoothness.length);
+        const p75Sm = percentile(smoothness, 75);
+        const sumDr = dropped.reduce((a, b) => a + b, 0);
+
+        els.avgDuration.textContent = fmtMs(avgDur);
+        els.avgSmoothness.textContent = fmtPct01(avgSm);
+        els.p75Smoothness.textContent = fmtPct01(p75Sm);
+        els.sumDropped.textContent = String(sumDr);
+
+        setControlsState();
+      }
+
+      function renderLog() {
+        if (!entries.length) {
+          els.logBody.innerHTML = '<tr><td colspan="5" style="color: var(--muted); font-family: var(--sans);">No entries yet. Start observing, then scroll.</td></tr>';
+          return;
+        }
+
+        const rows = entries.slice().reverse().map((e) => {
+          const cls = scoreClass(e.smoothnessScore);
+          const dotClass = cls === 'good' ? '' : (cls === 'warn' ? 'warn' : 'bad');
+          const scoreTxt = fmtPct01(e.smoothnessScore);
+          const durTxt = fmtMs(e.duration);
+          const droppedTxt = Number.isFinite(e.framesDropped) ? String(e.framesDropped) : '—';
+          const src = e.scrollSource || 'unknown';
+          const detail = `${Number.isFinite(e.framesProduced) ? e.framesProduced : '—'}/${Number.isFinite(e.framesExpected) ? e.framesExpected : '—'} frames`;
+
+          return `
+            <tr>
+              <td><span class="score"><span class="dot ${dotClass}"></span>${scoreTxt}</span></td>
+              <td>${durTxt}</td>
+              <td>${droppedTxt}</td>
+              <td>${escapeHtml(src)}</td>
+              <td style="color: var(--muted); font-family: var(--sans);">${escapeHtml(detail)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        els.logBody.innerHTML = rows;
+      }
+
+      function onEntries(list) {
+        const got = list.getEntries();
+        for (const e of got) {
+          entries.push(e);
+          if (entries.length > MAX_ENTRIES) entries = entries.slice(entries.length - MAX_ENTRIES);
+
+          if (els.consoleToggle.checked) {
+            try {
+              console.log('PerformanceScrollTiming', e.toJSON ? e.toJSON() : e);
+            } catch {
+              console.log('PerformanceScrollTiming', e);
+            }
+          }
+        }
+        renderLog();
+        updateStats();
+      }
+
+      function startObserving() {
+        if (observer) return;
+
+        try {
+          observer = new PerformanceObserver(onEntries);
+          observer.observe({ type: 'scroll', buffered: true });
+        } catch (err) {
+          observer = null;
+          alert('Could not start observing scroll entries in this browser. Open the console for details.');
+          console.error(err);
+          return;
+        }
+
+        setControlsState();
+      }
+
+      function stopObserving() {
+        if (!observer) return;
+        try {
+          observer.disconnect();
+        } finally {
+          observer = null;
+          setControlsState();
+        }
+      }
+
+      function clearEntries() {
+        entries = [];
+        renderLog();
+        updateStats();
+      }
+
+      function exportJson() {
+        const payload = entries.map((e) => {
+          if (e && typeof e.toJSON === 'function') return e.toJSON();
+          return {
+            entryType: e.entryType,
+            name: e.name,
+            startTime: e.startTime,
+            duration: e.duration,
+            endTime: e.endTime,
+            framesExpected: e.framesExpected,
+            framesProduced: e.framesProduced,
+            framesDropped: e.framesDropped,
+            smoothnessScore: e.smoothnessScore,
+            checkerboardTime: e.checkerboardTime,
+            checkerboardArea: e.checkerboardArea,
+            scrollSource: e.scrollSource,
+          };
+        });
+
+        const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), entries: payload }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'scroll-timing-entries.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      els.startBtn.addEventListener('click', startObserving);
+      els.stopBtn.addEventListener('click', stopObserving);
+      els.clearBtn.addEventListener('click', clearEntries);
+      els.exportBtn.addEventListener('click', exportJson);
+
+      els.scrollTopBtn.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      els.smoothScrollBtn.addEventListener('click', () => {
+        const doc = document.documentElement;
+        const max = Math.max(1, doc.scrollHeight - doc.clientHeight);
+        const target = Math.min(max, (doc.scrollTop || document.body.scrollTop) + Math.round(doc.clientHeight * 1.2));
+        window.scrollTo({ top: target, behavior: 'smooth' });
+      });
+
+      // Jank simulation: busy-loop during scroll events.
+      function setJankLabel() {
+        els.jankMsLabel.textContent = String(els.jankMs.value);
+      }
+      setJankLabel();
+      els.jankMs.addEventListener('input', setJankLabel);
+
+      function busyLoop(ms) {
+        const start = performance.now();
+        while (performance.now() - start < ms) {
+          // Intentionally empty.
+        }
+      }
+
+      function onScrollJank() {
+        if (!els.jankToggle.checked) return;
+        const ms = Number(els.jankMs.value) || 0;
+        if (ms > 0) busyLoop(ms);
+      }
+      addEventListener('scroll', onScrollJank, { passive: true });
+
+      updateStats();
+      renderLog();
+      setControlsState();
+    })();
   </script>
 </body>
 </html>
