@@ -1,5 +1,7 @@
 # scroll-timing-api
 Proposal for a performance API to help developers measure scroll performance.
+## Demo
+Try out the API in action (pollyfill): [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
 
 # Motivation
 Scroll is a very common user interaction in many web apps used for navigating content outside the available viewport or container.
