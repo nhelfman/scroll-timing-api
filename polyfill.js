@@ -3,13 +3,9 @@
   if ('PerformanceScrollTiming' in window) return;
 
   const scrollObservers = new Set();
-  let currentScroll = null;
-  let frameCount = 0;
-  let expectedFrames = 0;
-  let scrollStartTime = null;
-  let lastFrameTime = null;
-  let checkerboardTime = 0;
-  let rafId = null;
+  const activeScrolls = new WeakMap();
+  const inputHints = new WeakMap();
+  let lastInputHint = null;
 
   class PerformanceScrollTimingPolyfill {
     constructor(data) {
@@ -38,82 +34,201 @@
         duration: this.duration,
         smoothnessScore: this.smoothnessScore,
         framesDropped: this.framesDropped,
-        scrollSource: this.scrollSource
+        scrollSource: this.scrollSource,
+        target: this.target
       };
     }
   }
 
-  function startScrollTracking(source, target) {
-    scrollStartTime = performance.now();
-    frameCount = 0;
-    expectedFrames = 0;
-    lastFrameTime = scrollStartTime;
-    checkerboardTime = 0;
-    currentScroll = { source, target };
-    trackFrames();
+  function getRootScrollerElement() {
+    return document.scrollingElement || document.documentElement;
   }
 
-  function trackFrames() {
-    rafId = requestAnimationFrame((timestamp) => {
-      if (!currentScroll) return;
-      
-      frameCount++;
-      const frameDuration = timestamp - lastFrameTime;
-      const targetFrameDuration = 1000 / 60; // Assuming 60fps target
-      expectedFrames += Math.max(1, Math.round(frameDuration / targetFrameDuration));
-      lastFrameTime = timestamp;
-      
-      trackFrames();
-    });
-  }
+  function normalizeScrollTarget(rawTarget) {
+    if (!rawTarget) return getRootScrollerElement();
+    if (rawTarget === window || rawTarget === document) return getRootScrollerElement();
 
-  function endScrollTracking() {
-    if (!currentScroll || !scrollStartTime) return;
-    
-    cancelAnimationFrame(rafId);
-    
-    const endTime = performance.now();
-    const entry = new PerformanceScrollTimingPolyfill({
-      startTime: scrollStartTime,
-      duration: endTime - scrollStartTime,
-      framesExpected: expectedFrames,
-      framesProduced: frameCount,
-      checkerboardTime: checkerboardTime,
-      scrollSource: currentScroll.source,
-      target: currentScroll.target
-    });
+    // Document node
+    if (rawTarget.nodeType === 9) return getRootScrollerElement();
 
-    // Notify observers
-    scrollObservers.forEach(observer => {
-      observer.callback({ getEntries: () => [entry] });
-    });
+    // Text node → use parent element
+    if (rawTarget.nodeType === 3) return normalizeScrollTarget(rawTarget.parentElement);
 
-    currentScroll = null;
-    scrollStartTime = null;
-  }
-
-  // Detect scroll start
-  let scrollTimeout = null;
-  
-  document.addEventListener('scroll', (e) => {
-    if (!currentScroll) {
-      startScrollTracking('unknown', e.target);
+    // Element
+    if (rawTarget.nodeType === 1) {
+      const el = rawTarget;
+      if (el === document.documentElement || el === document.body) return getRootScrollerElement();
+      return el;
     }
-    
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(endScrollTracking, 150);
-  }, { passive: true });
+
+    return getRootScrollerElement();
+  }
+
+  function isPotentiallyScrollable(el) {
+    if (!el || el.nodeType !== 1) return false;
+
+    // Avoid treating the root scroller incorrectly.
+    if (el === document.documentElement || el === document.body) return true;
+
+    const style = window.getComputedStyle(el);
+    const overflowY = style.overflowY;
+    const overflowX = style.overflowX;
+    const canScrollY = (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && (el.scrollHeight > el.clientHeight + 1);
+    const canScrollX = (overflowX === 'auto' || overflowX === 'scroll' || overflowX === 'overlay') && (el.scrollWidth > el.clientWidth + 1);
+    return canScrollY || canScrollX;
+  }
+
+  function findScrollableFromEventTarget(e) {
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : null;
+    if (Array.isArray(path)) {
+      for (const node of path) {
+        if (node && node.nodeType === 1 && isPotentiallyScrollable(node)) {
+          return normalizeScrollTarget(node);
+        }
+      }
+    }
+
+    let el = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement);
+    while (el) {
+      if (isPotentiallyScrollable(el)) return normalizeScrollTarget(el);
+      el = el.parentElement;
+    }
+
+    return getRootScrollerElement();
+  }
+
+  function hintInputSource(scroller, source) {
+    if (!scroller) return;
+    const time = performance.now();
+    inputHints.set(scroller, { source, time });
+    lastInputHint = { scroller, time };
+  }
+
+  function getRecentInputScrollerCandidate() {
+    if (!lastInputHint) return null;
+    if (performance.now() - lastInputHint.time > 250) {
+      lastInputHint = null;
+      return null;
+    }
+    return lastInputHint.scroller;
+  }
+
+  function consumeRecentInputSource(scroller) {
+    const hint = inputHints.get(scroller);
+    if (!hint) return null;
+    if (performance.now() - hint.time > 250) {
+      inputHints.delete(scroller);
+      return null;
+    }
+    inputHints.delete(scroller);
+    return hint.source;
+  }
+
+  class ActiveScrollState {
+    constructor(source, target) {
+      this.source = source;
+      this.target = target;
+      this.startTime = performance.now();
+      this.frameCount = 0;
+      this.expectedFrames = 0;
+      this.lastFrameTime = this.startTime;
+      this.checkerboardTime = 0;
+      this.rafId = null;
+      this.timeoutId = null;
+      this.ended = false;
+    }
+
+    start() {
+      this.trackFrames();
+      this.scheduleEnd();
+    }
+
+    trackFrames() {
+      this.rafId = requestAnimationFrame((timestamp) => {
+        if (this.ended) return;
+
+        this.frameCount++;
+        const frameDuration = timestamp - this.lastFrameTime;
+        const targetFrameDuration = 1000 / 60; // Assuming 60fps target
+        this.expectedFrames += Math.max(1, Math.round(frameDuration / targetFrameDuration));
+        this.lastFrameTime = timestamp;
+
+        this.trackFrames();
+      });
+    }
+
+    scheduleEnd() {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = setTimeout(() => this.end(), 150);
+    }
+
+    end() {
+      if (this.ended) return;
+      this.ended = true;
+
+      cancelAnimationFrame(this.rafId);
+      clearTimeout(this.timeoutId);
+
+      const endTime = performance.now();
+      const entry = new PerformanceScrollTimingPolyfill({
+        startTime: this.startTime,
+        duration: endTime - this.startTime,
+        framesExpected: this.expectedFrames,
+        framesProduced: this.frameCount,
+        checkerboardTime: this.checkerboardTime,
+        scrollSource: this.source,
+        target: this.target
+      });
+
+      scrollObservers.forEach(observer => {
+        observer.callback({ getEntries: () => [entry] });
+      });
+
+      activeScrolls.delete(this.target);
+    }
+  }
+
+  function onScrollEvent(e) {
+    const rootScroller = getRootScrollerElement();
+    let scroller = normalizeScrollTarget(e.target);
+
+    // Some browsers can surface element scrolls with a document target when observed
+    // from a document-level capture listener. If we recently saw wheel/touch over a
+    // specific scroll container, prefer that as the target.
+    if (scroller === rootScroller) {
+      const candidate = getRecentInputScrollerCandidate();
+      if (candidate && candidate !== rootScroller) {
+        scroller = candidate;
+      }
+    }
+
+    const hintedSource = consumeRecentInputSource(scroller);
+    let state = activeScrolls.get(scroller);
+
+    if (!state) {
+      state = new ActiveScrollState(hintedSource || 'unknown', scroller);
+      activeScrolls.set(scroller, state);
+      state.start();
+      return;
+    }
+
+    // If we started with unknown and got a fresh hint, upgrade the source.
+    if (state.source === 'unknown' && hintedSource) {
+      state.source = hintedSource;
+    }
+    state.scheduleEnd();
+  }
+
+  // Detect scroll start/end for *any* scrollable element.
+  // Note: `scroll` doesn't bubble; using capture allows observing element scrolls.
+  document.addEventListener('scroll', onScrollEvent, { passive: true, capture: true });
 
   document.addEventListener('wheel', (e) => {
-    if (!currentScroll) {
-      startScrollTracking('wheel', e.target);
-    }
+    hintInputSource(findScrollableFromEventTarget(e), 'wheel');
   }, { passive: true });
 
   document.addEventListener('touchstart', (e) => {
-    if (!currentScroll) {
-      startScrollTracking('touch', e.target);
-    }
+    hintInputSource(findScrollableFromEventTarget(e), 'touch');
   }, { passive: true });
 
   // Extend PerformanceObserver
@@ -132,7 +247,8 @@
         originalObserve(options);
       } catch (e) {
         // Ignore if 'scroll' type is not supported natively
-        if (!options.type === 'scroll') throw e;
+        const observingScroll = options && (options.type === 'scroll' || options.entryTypes?.includes('scroll'));
+        if (!observingScroll) throw e;
       }
     };
     
