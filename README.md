@@ -34,6 +34,11 @@ Scroll start time measures the latency between the user's scroll input and the f
 - **First frame timestamp**: When the first frame reflecting the scroll was presented
 - **Scroll start latency**: The delta between input and first frame presentation
 
+In this proposal:
+- `entry.startTime` is the **input timestamp** (the first input in the scroll sequence).
+- `entry.firstFrameTime` is the **first frame timestamp**.
+- `scrollStartLatency` can be derived as `entry.firstFrameTime - entry.startTime`.
+
 **Why it matters:**
 High scroll start latency makes the page feel unresponsive. Users expect immediate visual feedback when they initiate a scroll gesture. Latency greater than 100ms is generally perceptible and negatively impacts user experience.
 
@@ -112,6 +117,7 @@ The Scroll Timing API extends the Performance Observer pattern, consistent with 
 ```webidl
 interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute DOMHighResTimeStamp startTime;
+  readonly attribute DOMHighResTimeStamp firstFrameTime;
   readonly attribute DOMHighResTimeStamp endTime;
   readonly attribute DOMHighResTimeStamp duration;
   readonly attribute unsigned long framesExpected;
@@ -130,6 +136,9 @@ interface PerformanceScrollTiming : PerformanceEntry {
 // Create an observer to capture scroll timing entries
 const observer = new PerformanceObserver((list) => {
   for (const entry of list.getEntries()) {
+    // Derived metric.
+    const scrollStartLatency = Math.max(0, entry.firstFrameTime - entry.startTime);
+
     // Not part of the native API shape; derived metric.
     const smoothnessScore = entry.framesExpected > 0
       ? entry.framesProduced / entry.framesExpected
@@ -137,6 +146,8 @@ const observer = new PerformanceObserver((list) => {
 
     console.log('Scroll performance:', {
       startTime: entry.startTime,
+      firstFrameTime: entry.firstFrameTime,
+      scrollStartLatency,
       duration: entry.duration,
       smoothnessScore,
       droppedFrames: entry.framesDropped,

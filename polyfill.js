@@ -12,11 +12,13 @@
       this.entryType = 'scroll';
       this.name = 'scroll';
       this.startTime = data.startTime;
+      this.firstFrameTime = data.firstFrameTime;
       this.duration = data.duration;
       this.endTime = data.startTime + data.duration;
       this.framesExpected = data.framesExpected;
       this.framesProduced = data.framesProduced;
       this.framesDropped = data.framesExpected - data.framesProduced;
+      this.scrollStartLatency = Math.max(0, this.firstFrameTime - this.startTime);
       this.smoothnessScore = data.framesExpected > 0 
         ? data.framesProduced / data.framesExpected 
         : 1;
@@ -31,6 +33,8 @@
         entryType: this.entryType,
         name: this.name,
         startTime: this.startTime,
+        firstFrameTime: this.firstFrameTime,
+        scrollStartLatency: this.scrollStartLatency,
         duration: this.duration,
         smoothnessScore: this.smoothnessScore,
         framesDropped: this.framesDropped,
@@ -113,7 +117,7 @@
     return lastInputHint.scroller;
   }
 
-  function consumeRecentInputSource(scroller) {
+  function consumeRecentInputHint(scroller) {
     const hint = inputHints.get(scroller);
     if (!hint) return null;
     if (performance.now() - hint.time > 250) {
@@ -121,17 +125,18 @@
       return null;
     }
     inputHints.delete(scroller);
-    return hint.source;
+    return hint;
   }
 
   class ActiveScrollState {
-    constructor(source, target) {
+    constructor(source, target, inputTime) {
       this.source = source;
       this.target = target;
-      this.startTime = performance.now();
+      this.startTime = typeof inputTime === 'number' ? inputTime : performance.now();
+      this.firstFrameTime = null;
       this.frameCount = 0;
       this.expectedFrames = 0;
-      this.lastFrameTime = this.startTime;
+      this.lastFrameTime = null;
       this.checkerboardTime = 0;
       this.rafId = null;
       this.timeoutId = null;
@@ -147,10 +152,23 @@
       this.rafId = requestAnimationFrame((timestamp) => {
         if (this.ended) return;
 
+        if (this.frameCount === 0) {
+          // rAF's `timestamp` can represent the frame start time and may be slightly
+          // earlier than `performance.now()` (and thus earlier than the input event).
+          // Use a monotonic "now" from the same clock, clamped to be >= startTime.
+          this.firstFrameTime = Math.max(performance.now(), this.startTime);
+        }
+
         this.frameCount++;
-        const frameDuration = timestamp - this.lastFrameTime;
+
         const targetFrameDuration = 1000 / 60; // Assuming 60fps target
-        this.expectedFrames += Math.max(1, Math.round(frameDuration / targetFrameDuration));
+        if (this.lastFrameTime === null) {
+          this.expectedFrames += 1;
+        } else {
+          const frameDuration = timestamp - this.lastFrameTime;
+          this.expectedFrames += Math.max(1, Math.round(frameDuration / targetFrameDuration));
+        }
+
         this.lastFrameTime = timestamp;
 
         this.trackFrames();
@@ -170,8 +188,10 @@
       clearTimeout(this.timeoutId);
 
       const endTime = performance.now();
+      const firstFrameTime = this.firstFrameTime ?? this.startTime;
       const entry = new PerformanceScrollTimingPolyfill({
         startTime: this.startTime,
+        firstFrameTime,
         duration: endTime - this.startTime,
         framesExpected: this.expectedFrames,
         framesProduced: this.frameCount,
@@ -202,11 +222,13 @@
       }
     }
 
-    const hintedSource = consumeRecentInputSource(scroller);
+    const hinted = consumeRecentInputHint(scroller);
+    const hintedSource = hinted?.source;
+    const hintedTime = hinted?.time;
     let state = activeScrolls.get(scroller);
 
     if (!state) {
-      state = new ActiveScrollState(hintedSource || 'unknown', scroller);
+      state = new ActiveScrollState(hintedSource || 'unknown', scroller, hintedTime);
       activeScrolls.set(scroller, state);
       state.start();
       return;
@@ -229,6 +251,21 @@
 
   document.addEventListener('touchstart', (e) => {
     hintInputSource(findScrollableFromEventTarget(e), 'touch');
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    hintInputSource(findScrollableFromEventTarget(e), 'touch');
+  }, { passive: true });
+
+  document.addEventListener('keydown', (e) => {
+    // Heuristic: keys commonly used to scroll.
+    const scrollKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+    if (!scrollKeys.has(e.key)) return;
+
+    // Prefer a focused scroll container if we can find one.
+    const active = document.activeElement;
+    const pseudoEvent = { target: active, composedPath: () => [active] };
+    hintInputSource(findScrollableFromEventTarget(pseudoEvent), 'keyboard');
   }, { passive: true });
 
   // Extend PerformanceObserver

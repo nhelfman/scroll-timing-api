@@ -1028,6 +1028,10 @@
             entryType: e.entryType,
             name: e.name,
             startTime: e.startTime,
+            firstFrameTime: e.firstFrameTime,
+            scrollStartLatency: Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
+              ? Math.max(0, e.firstFrameTime - e.startTime)
+              : undefined,
             duration: e.duration,
             endTime: e.endTime,
             framesExpected: e.framesExpected,
