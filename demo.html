@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scroll Timing API Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+    }
+
+    .metrics-panel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      padding: 20px;
+      z-index: 1000;
+    }
+
+    .metrics-panel h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: #333;
+      border-bottom: 2px solid #4CAF50;
+      padding-bottom: 8px;
+    }
+
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .metric:last-child {
+      border-bottom: none;
+    }
+
+    .metric-label {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .metric-value {
+      font-weight: 600;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .metric-value.good {
+      color: #4CAF50;
+    }
+
+    .metric-value.warning {
+      color: #FF9800;
+    }
+
+    .metric-value.poor {
+      color: #f44336;
+    }
+
+    .scroll-history {
+      margin-top: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .scroll-history h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .scroll-entry {
+      background: #f9f9f9;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .scroll-entry .source {
+      font-weight: 600;
+      color: #2196F3;
+    }
+
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px 40px 20px;
+    }
+
+    .content h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .content p {
+      color: #555;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .card h2 {
+      color: #333;
+      margin-top: 0;
+    }
+
+    .placeholder-image {
+      width: 100%;
+      height: 200px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      margin: 20px 0;
+    }
+
+    .instructions {
+      background: #e3f2fd;
+      border-left: 4px solid #2196F3;
+      padding: 16px 20px;
+      margin-bottom: 30px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .instructions h3 {
+      margin: 0 0 8px 0;
+      color: #1565C0;
+    }
+
+    .instructions p {
+      margin: 0;
+      color: #1976D2;
+    }
+
+    footer {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <!-- Metrics Panel -->
+  <div class="metrics-panel">
+    <h2>📊 Scroll Metrics</h2>
+    
+    <div class="metric">
+      <span class="metric-label">Total Scrolls</span>
+      <span class="metric-value" id="scroll-count">0</span>
+    </div>
+    
+    <div class="metric">
+      <span class="metric-label">Last Duration</span>
+      <span class="metric-value" id="last-duration">-</span>
+    </div>
+    
+    <div class="metric">
+      <span class="metric-label">Last Smoothness</span>
+      <span class="metric-value" id="last-smoothness">-</span>
+    </div>
+    
+    <div class="metric">
+      <span class="metric-label">Frames Dropped</span>
+      <span class="metric-value" id="frames-dropped">-</span>
+    </div>
+    
+    <div class="metric">
+      <span class="metric-label">Avg Smoothness</span>
+      <span class="metric-value" id="avg-smoothness">-</span>
+    </div>
+
+    <div class="scroll-history">
+      <h3>Recent Scroll Events</h3>
+      <div id="history-container"></div>
+    </div>
+  </div>
+
+  <!-- Scrollable Content -->
+  <div class="content">
+    <h1>Scroll Timing API Demo</h1>
+    
+    <div class="instructions">
+      <h3>👋 Try scrolling!</h3>
+      <p>Scroll this page using mouse wheel, touch, or keyboard to see real-time scroll performance metrics in the panel on the right.</p>
+    </div>
+
+    <div class="card">
+      <h2>What is the Scroll Timing API?</h2>
+      <p>The Scroll Timing API is a proposed performance API that helps developers measure scroll performance metrics in a standardized way. It provides insights into scroll responsiveness, smoothness, and visual completeness.</p>
+      <div class="placeholder-image">📜 Scroll Performance</div>
+      <p>This demo uses a polyfill to demonstrate how the API works. The metrics panel shows real-time data collected during your scroll interactions.</p>
+    </div>
+
+    <div class="card">
+      <h2>Key Metrics Explained</h2>
+      <p><strong>Duration:</strong> How long the scroll interaction lasted, from the first input to when the viewport settled.</p>
+      <p><strong>Smoothness Score:</strong> A percentage indicating how many expected frames were actually rendered. 100% means perfect smoothness with no dropped frames.</p>
+      <p><strong>Frames Dropped:</strong> The number of frames that were skipped during scrolling, causing visible jank.</p>
+      <div class="placeholder-image">📈 Metrics</div>
+    </div>
+
+    <div class="card">
+      <h2>Why Measure Scroll Performance?</h2>
+      <p>Scroll jank is one of the most noticeable performance issues for users. It directly impacts perceived quality and user satisfaction.</p>
+      <p>By measuring scroll performance, developers can:</p>
+      <ul>
+        <li>Identify performance regressions before they affect users</li>
+        <li>Set performance budgets for scroll smoothness</li>
+        <li>Compare scroll performance across different devices</li>
+        <li>Correlate scroll metrics with user engagement</li>
+      </ul>
+      <div class="placeholder-image">🎯 Goals</div>
+    </div>
+
+    <div class="card">
+      <h2>Using the API</h2>
+      <p>The Scroll Timing API follows the familiar PerformanceObserver pattern:</p>
+      <pre style="background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto;"><code>const observer = new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    console.log('Smoothness:', entry.smoothnessScore);
+    console.log('Duration:', entry.duration);
+  }
+});
+
+observer.observe({ type: 'scroll', buffered: true });</code></pre>
+      <div class="placeholder-image">💻 Code</div>
+    </div>
+
+    <div class="card">
+      <h2>More Content to Scroll</h2>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+      <div class="placeholder-image">🖼️ Image 1</div>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
+      <div class="placeholder-image">🖼️ Image 2</div>
+      <p>Sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.</p>
+    </div>
+
+    <div class="card">
+      <h2>Even More Content</h2>
+      <p>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</p>
+      <div class="placeholder-image">🖼️ Image 3</div>
+      <p>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</p>
+      <div class="placeholder-image">🖼️ Image 4</div>
+    </div>
+
+    <div class="card">
+      <h2>Final Section</h2>
+      <p>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur?</p>
+      <div class="placeholder-image">🏁 End</div>
+      <p>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>
+    </div>
+
+    <footer>
+      <p>Scroll Timing API Demo • Scroll back to the top to see more metrics!</p>
+    </footer>
+  </div>
+
+  <!-- Load the polyfill -->
+  <script src="polyfill.js"></script>
+  
+  <!-- Demo script -->
+  <script>
+    // Track all scroll entries
+    const scrollEntries = [];
+    
+    // DOM elements
+    const scrollCountEl = document.getElementById('scroll-count');
+    const lastDurationEl = document.getElementById('last-duration');
+    const lastSmoothnessEl = document.getElementById('last-smoothness');
+    const framesDroppedEl = document.getElementById('frames-dropped');
+    const avgSmoothnessEl = document.getElementById('avg-smoothness');
+    const historyContainer = document.getElementById('history-container');
+
+    // Helper to format smoothness with color coding
+    function formatSmoothness(score) {
+      const percentage = (score * 100).toFixed(1);
+      return {
+        text: percentage + '%',
+        class: score >= 0.9 ? 'good' : score >= 0.6 ? 'warning' : 'poor'
+      };
+    }
+
+    // Update the metrics panel
+    function updateMetrics(entry) {
+      scrollEntries.push(entry);
+      
+      // Update count
+      scrollCountEl.textContent = scrollEntries.length;
+      
+      // Update last duration
+      lastDurationEl.textContent = entry.duration.toFixed(0) + 'ms';
+      
+      // Update last smoothness
+      const smoothness = formatSmoothness(entry.smoothnessScore);
+      lastSmoothnessEl.textContent = smoothness.text;
+      lastSmoothnessEl.className = 'metric-value ' + smoothness.class;
+      
+      // Update frames dropped
+      framesDroppedEl.textContent = entry.framesDropped;
+      framesDroppedEl.className = 'metric-value ' + (entry.framesDropped === 0 ? 'good' : entry.framesDropped < 5 ? 'warning' : 'poor');
+      
+      // Calculate and update average smoothness
+      const avgScore = scrollEntries.reduce((sum, e) => sum + e.smoothnessScore, 0) / scrollEntries.length;
+      const avgSmoothness = formatSmoothness(avgScore);
+      avgSmoothnessEl.textContent = avgSmoothness.text;
+      avgSmoothnessEl.className = 'metric-value ' + avgSmoothness.class;
+      
+      // Add to history
+      addHistoryEntry(entry);
+    }
+
+    // Add entry to scroll history
+    function addHistoryEntry(entry) {
+      const entryEl = document.createElement('div');
+      entryEl.className = 'scroll-entry';
+      entryEl.innerHTML = `
+        <span class="source">${entry.scrollSource}</span> • 
+        ${entry.duration.toFixed(0)}ms • 
+        ${(entry.smoothnessScore * 100).toFixed(0)}% smooth • 
+        ${entry.framesDropped} dropped
+      `;
+      
+      // Insert at the top
+      historyContainer.insertBefore(entryEl, historyContainer.firstChild);
+      
+      // Keep only last 10 entries
+      while (historyContainer.children.length > 10) {
+        historyContainer.removeChild(historyContainer.lastChild);
+      }
+    }
+
+    // Create the PerformanceObserver
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        console.log('Scroll Timing Entry:', entry.toJSON());
+        updateMetrics(entry);
+      }
+    });
+
+    // Start observing scroll timing entries
+    observer.observe({ type: 'scroll', buffered: true });
+
+    console.log('Scroll Timing API Demo loaded. Start scrolling to see metrics!');
+  </script>
+</body>
+</html>
