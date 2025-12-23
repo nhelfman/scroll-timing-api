@@ -117,7 +117,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesExpected;
   readonly attribute unsigned long framesProduced;
   readonly attribute unsigned long framesDropped;
-  readonly attribute double smoothnessScore;
   readonly attribute double checkerboardTime;
   readonly attribute double checkerboardArea;
   readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "programmatic"
@@ -131,10 +130,15 @@ interface PerformanceScrollTiming : PerformanceEntry {
 // Create an observer to capture scroll timing entries
 const observer = new PerformanceObserver((list) => {
   for (const entry of list.getEntries()) {
+    // Not part of the native API shape; derived metric.
+    const smoothnessScore = entry.framesExpected > 0
+      ? entry.framesProduced / entry.framesExpected
+      : 1;
+
     console.log('Scroll performance:', {
       startTime: entry.startTime,
       duration: entry.duration,
-      smoothness: entry.smoothnessScore,
+      smoothnessScore,
       droppedFrames: entry.framesDropped,
       checkerboardTime: entry.checkerboardTime,
       source: entry.scrollSource,
@@ -142,7 +146,7 @@ const observer = new PerformanceObserver((list) => {
     });
     
     // Report to analytics
-    if (entry.smoothnessScore < 0.9) {
+    if (smoothnessScore < 0.9) {
       reportScrollJank(entry);
     }
   }
