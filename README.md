@@ -1,29 +1,346 @@
 # scroll-timing-api
-Propoal for perfrmance API to help developers measure scroll performance.
+Proposal for a performance API to help developers measure scroll performance.
 
 # Motivation
 Scroll is a very common user interaction in many web apps used for navigating content outside the available viewport or container.
 
-TODO - rational why it is important to measure scroll preformance and have a standard API for it.
+Measuring scroll performance is critical because:
 
-# Scroll performance
-TODO - explaination of different scroll aspects that are important to measure
+1. **User Experience Impact**: Scroll jank and stuttering are immediately perceptible to users and significantly degrade the browsing experience. Studies show that users associate smooth scrolling with overall site quality and trustworthiness.
 
-## scroll start time
-TODO - fill details
+2. **Lack of Standardized Metrics**: Currently, developers rely on ad-hoc solutions like `requestAnimationFrame` loops or `IntersectionObserver` hacks to approximate scroll performance, leading to inconsistent measurements across sites and tools.
 
-## scroll end time
-TODO - fill details
+3. **Real User Monitoring (RUM)**: A standard API enables collecting scroll performance data from real users in production, allowing developers to identify performance issues that may not appear in lab testing.
 
-## scroll smoothness
-TODO - fill details
+4. **Correlation with Business Metrics**: Poor scroll performance has been shown to correlate with reduced user engagement, lower time-on-page, and decreased conversion rates, especially on content-heavy sites.
 
-## scroll checkerboarding
-TODO - fill details
+5. **Framework and Library Support**: A standardized API allows UI frameworks, virtual scrolling libraries, and performance monitoring tools to provide consistent scroll performance insights.
 
-# API shape
-TODO - desribe API that uses PerformanceObserver to measure scroll performance aspects
+# Scroll Performance
+Scroll performance encompasses several measurable aspects that together determine the quality of the scrolling experience:
 
+- **Responsiveness**: How quickly the page responds when a user initiates a scroll gesture
+- **Smoothness**: Whether frames are rendered consistently at the target frame rate during scrolling
+- **Visual Completeness**: Whether content is fully painted when it scrolls into view
+- **Stability**: Whether the scroll position remains predictable without unexpected jumps
 
-# Pollyfill
-Implementation of a pollyfill to better explain the usage of such API
+## Scroll Start Time
+Scroll start time measures the latency between the user's scroll input and the first visual update on screen.
+
+**Key metrics:**
+- **Input timestamp**: When the scroll gesture was detected (touch, wheel, or keyboard event)
+- **First frame timestamp**: When the first frame reflecting the scroll was presented
+- **Scroll start latency**: The delta between input and first frame presentation
+
+**Why it matters:**
+High scroll start latency makes the page feel unresponsive. Users expect immediate visual feedback when they initiate a scroll gesture. Latency greater than 100ms is generally perceptible and negatively impacts user experience.
+
+**Common causes of high scroll start latency:**
+- Long-running JavaScript blocking the main thread
+- Expensive style recalculations or layout operations
+- Compositor thread contention
+- Touch event handlers without `{ passive: true }`
+
+## Scroll End Time
+Scroll end time captures when a scroll interaction completes and the viewport settles at its final position.
+
+**Key metrics:**
+- **Last input timestamp**: The final scroll input event in a scroll sequence
+- **Settle timestamp**: When momentum/inertia scrolling completes and the viewport is stable
+- **Total scroll duration**: Time from scroll start to scroll settle
+
+**Why it matters:**
+Understanding scroll end time is essential for:
+- Measuring total scroll interaction duration
+- Triggering deferred work (lazy loading, analytics) at the right moment
+- Calculating overall scroll responsiveness metrics
+
+**Considerations:**
+- Momentum scrolling on touch devices extends scroll duration beyond the last touch input
+- Programmatic smooth scrolling has predictable end times
+- Scroll snapping may adjust the final position after user input ends
+
+## Scroll Smoothness
+Scroll smoothness measures how consistently frames are rendered during a scroll animation, reflecting visual fluidity.
+
+**Key metrics:**
+- **Frames expected**: Number of frames that should have been rendered at the target refresh rate
+- **Frames produced**: Number of frames actually rendered
+- **Dropped frame count**: Frames that were skipped or missed their deadline
+- **Average frame duration**: Mean time between presented frames
+- **Frame duration variance**: Consistency of frame timing (lower is smoother)
+- **Smoothness percentage**: `(frames_produced / frames_expected) * 100`
+
+**Why it matters:**
+Even if scroll starts quickly, dropped frames during scrolling create visible jank. Users perceive scroll smoothness as a key quality indicator. A smoothness score below 90% is typically noticeable, and below 60% is considered poor.
+
+**Common causes of scroll jank:**
+- Expensive paint operations (large areas, complex effects)
+- Layout thrashing during scroll event handlers
+- Non-composited animations
+- Image decoding on the main thread
+- Garbage collection pauses
+
+## Scroll Checkerboarding
+Scroll checkerboarding occurs when content is not ready to be displayed as it scrolls into the viewport, resulting in blank or placeholder areas.
+
+**Key metrics:**
+- **Checkerboard time**: Total duration that unpainted areas were visible during scroll
+- **Checkerboard area**: Percentage of viewport affected by incomplete painting
+- **Checkerboard events**: Count of distinct checkerboarding occurrences
+
+**Why it matters:**
+Checkerboarding breaks the illusion of scrolling through continuous content. It's particularly problematic for:
+- Image-heavy pages where images load as they scroll into view
+- Infinite scroll implementations
+- Complex layouts with off-screen content
+- Pages with web fonts that haven't loaded
+
+**Common causes:**
+- Slow network preventing timely resource loading
+- Insufficient tile/layer rasterization ahead of scroll
+- Large images without proper sizing hints
+- Lazy loading triggered too late
+
+# API Shape
+The Scroll Timing API extends the Performance Observer pattern, consistent with other performance APIs like Long Tasks, Layout Instability, and Event Timing.
+
+## PerformanceScrollTiming Interface
+
+```webidl
+interface PerformanceScrollTiming : PerformanceEntry {
+  readonly attribute DOMHighResTimeStamp startTime;
+  readonly attribute DOMHighResTimeStamp endTime;
+  readonly attribute DOMHighResTimeStamp duration;
+  readonly attribute unsigned long framesExpected;
+  readonly attribute unsigned long framesProduced;
+  readonly attribute unsigned long framesDropped;
+  readonly attribute double smoothnessScore;
+  readonly attribute double checkerboardTime;
+  readonly attribute double checkerboardArea;
+  readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "programmatic"
+  readonly attribute Element? target;
+};
+```
+
+## Usage with PerformanceObserver
+
+```javascript
+// Create an observer to capture scroll timing entries
+const observer = new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    console.log('Scroll performance:', {
+      startTime: entry.startTime,
+      duration: entry.duration,
+      smoothness: entry.smoothnessScore,
+      droppedFrames: entry.framesDropped,
+      checkerboardTime: entry.checkerboardTime,
+      source: entry.scrollSource,
+      target: entry.target
+    });
+    
+    // Report to analytics
+    if (entry.smoothnessScore < 0.9) {
+      reportScrollJank(entry);
+    }
+  }
+});
+
+// Start observing scroll timing entries
+observer.observe({ type: 'scroll', buffered: true });
+```
+
+## Aggregating Scroll Metrics
+
+```javascript
+class ScrollMetricsCollector {
+  constructor() {
+    this.scrollEntries = [];
+    this.observer = new PerformanceObserver((list) => {
+      this.scrollEntries.push(...list.getEntries());
+    });
+    this.observer.observe({ type: 'scroll', buffered: true });
+  }
+
+  getAggregateMetrics() {
+    if (this.scrollEntries.length === 0) return null;
+    
+    const totalFramesExpected = this.scrollEntries.reduce((sum, e) => sum + e.framesExpected, 0);
+    const totalFramesProduced = this.scrollEntries.reduce((sum, e) => sum + e.framesProduced, 0);
+    const totalCheckerboardTime = this.scrollEntries.reduce((sum, e) => sum + e.checkerboardTime, 0);
+    
+    return {
+      scrollCount: this.scrollEntries.length,
+      averageDuration: this.scrollEntries.reduce((sum, e) => sum + e.duration, 0) / this.scrollEntries.length,
+      overallSmoothness: totalFramesProduced / totalFramesExpected,
+      totalCheckerboardTime,
+      p75Smoothness: this.percentile(this.scrollEntries.map(e => e.smoothnessScore), 75)
+    };
+  }
+
+  percentile(arr, p) {
+    const sorted = arr.slice().sort((a, b) => a - b);
+    const index = Math.ceil((p / 100) * sorted.length) - 1;
+    return sorted[index];
+  }
+}
+```
+
+# Polyfill
+Implementation of a polyfill to better explain the usage of such API.
+
+```javascript
+// Polyfill for Scroll Timing API
+(function() {
+  if ('PerformanceScrollTiming' in window) return;
+
+  const scrollObservers = new Set();
+  let currentScroll = null;
+  let frameCount = 0;
+  let expectedFrames = 0;
+  let scrollStartTime = null;
+  let lastFrameTime = null;
+  let checkerboardTime = 0;
+  let rafId = null;
+
+  class PerformanceScrollTimingPolyfill {
+    constructor(data) {
+      this.entryType = 'scroll';
+      this.name = 'scroll';
+      this.startTime = data.startTime;
+      this.duration = data.duration;
+      this.endTime = data.startTime + data.duration;
+      this.framesExpected = data.framesExpected;
+      this.framesProduced = data.framesProduced;
+      this.framesDropped = data.framesExpected - data.framesProduced;
+      this.smoothnessScore = data.framesExpected > 0 
+        ? data.framesProduced / data.framesExpected 
+        : 1;
+      this.checkerboardTime = data.checkerboardTime;
+      this.checkerboardArea = 0; // Difficult to polyfill accurately
+      this.scrollSource = data.scrollSource;
+      this.target = data.target;
+    }
+
+    toJSON() {
+      return {
+        entryType: this.entryType,
+        name: this.name,
+        startTime: this.startTime,
+        duration: this.duration,
+        smoothnessScore: this.smoothnessScore,
+        framesDropped: this.framesDropped,
+        scrollSource: this.scrollSource
+      };
+    }
+  }
+
+  function startScrollTracking(source, target) {
+    scrollStartTime = performance.now();
+    frameCount = 0;
+    expectedFrames = 0;
+    lastFrameTime = scrollStartTime;
+    checkerboardTime = 0;
+    currentScroll = { source, target };
+    trackFrames();
+  }
+
+  function trackFrames() {
+    rafId = requestAnimationFrame((timestamp) => {
+      if (!currentScroll) return;
+      
+      frameCount++;
+      const frameDuration = timestamp - lastFrameTime;
+      const targetFrameDuration = 1000 / 60; // Assuming 60fps target
+      expectedFrames += Math.max(1, Math.round(frameDuration / targetFrameDuration));
+      lastFrameTime = timestamp;
+      
+      trackFrames();
+    });
+  }
+
+  function endScrollTracking() {
+    if (!currentScroll || !scrollStartTime) return;
+    
+    cancelAnimationFrame(rafId);
+    
+    const endTime = performance.now();
+    const entry = new PerformanceScrollTimingPolyfill({
+      startTime: scrollStartTime,
+      duration: endTime - scrollStartTime,
+      framesExpected: expectedFrames,
+      framesProduced: frameCount,
+      checkerboardTime: checkerboardTime,
+      scrollSource: currentScroll.source,
+      target: currentScroll.target
+    });
+
+    // Notify observers
+    scrollObservers.forEach(observer => {
+      observer.callback({ getEntries: () => [entry] });
+    });
+
+    currentScroll = null;
+    scrollStartTime = null;
+  }
+
+  // Detect scroll start
+  let scrollTimeout = null;
+  
+  document.addEventListener('scroll', (e) => {
+    if (!currentScroll) {
+      startScrollTracking('unknown', e.target);
+    }
+    
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(endScrollTracking, 150);
+  }, { passive: true });
+
+  document.addEventListener('wheel', (e) => {
+    if (!currentScroll) {
+      startScrollTracking('wheel', e.target);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchstart', (e) => {
+    if (!currentScroll) {
+      startScrollTracking('touch', e.target);
+    }
+  }, { passive: true });
+
+  // Extend PerformanceObserver
+  const OriginalPerformanceObserver = window.PerformanceObserver;
+  
+  window.PerformanceObserver = function(callback) {
+    const observer = new OriginalPerformanceObserver(callback);
+    const originalObserve = observer.observe.bind(observer);
+    
+    observer.observe = function(options) {
+      if (options.type === 'scroll' || options.entryTypes?.includes('scroll')) {
+        scrollObservers.add({ callback, options });
+      }
+      
+      try {
+        originalObserve(options);
+      } catch (e) {
+        // Ignore if 'scroll' type is not supported natively
+        if (!options.type === 'scroll') throw e;
+      }
+    };
+    
+    const originalDisconnect = observer.disconnect.bind(observer);
+    observer.disconnect = function() {
+      scrollObservers.forEach(obs => {
+        if (obs.callback === callback) scrollObservers.delete(obs);
+      });
+      originalDisconnect();
+    };
+    
+    return observer;
+  };
+
+  window.PerformanceScrollTiming = PerformanceScrollTimingPolyfill;
+})();
+```
+
+This polyfill provides a basic implementation demonstrating the API usage patterns. Note that a production polyfill would need additional work to accurately measure checkerboarding and handle edge cases across different browsers and input methods.
