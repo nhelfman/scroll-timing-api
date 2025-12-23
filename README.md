@@ -178,3 +178,44 @@ See [polyfill.js](polyfill.js) for the full implementation.
 ```
 
 **Note:** This polyfill uses heuristics-based approximations due to the lack of relevant native APIs required for accurate scroll performance measurement. It is intended for demonstration and prototyping purposes only. Metrics like checkerboarding detection and precise frame timing cannot be accurately measured without browser-level instrumentation. A native implementation would have access to compositor data, rendering pipeline information, and other internal metrics not exposed to JavaScript.
+
+# Open Questions
+
+## Refresh Rate Baseline for Frame Counting
+
+**Question:** Should the API calculate expected frames based on a standardized baseline (e.g., 60fps) or use the device's actual refresh rate?
+
+**Context:**
+- The `framesExpected` and `framesProduced` metrics aim to quantify scroll smoothness
+- Different approaches have different tradeoffs:
+
+**Option A: Standardized 60fps baseline**
+- **Pros:**
+  - Consistent metrics across all devices and refresh rates
+  - Easier to compare scroll performance between different hardware
+  - Simpler mental model: "90% smoothness" means the same thing everywhere
+  - Matches most existing performance tools and metrics
+- **Cons:**
+  - On high refresh rate displays (90Hz, 120Hz, 144Hz), smooth scrolling would appear to have "extra" frames and show >100% smoothness
+  - On throttled environments (30fps, 32fps), even perfectly smooth scrolling would show low smoothness scores (~50%)
+  - Doesn't reflect actual user experience on non-60Hz displays
+
+**Option B: Device actual refresh rate**
+- **Pros:**
+  - Accurately reflects whether frames are being dropped relative to what the display can show
+  - Better represents actual user experience on that specific device
+  - Works correctly in throttled scenarios (DevTools open, background tabs, power saving)
+- **Cons:**
+  - Metrics not directly comparable across devices (90% on 60Hz ≠ 90% on 120Hz in absolute terms)
+  - Adds complexity: developers need to know the refresh rate to interpret metrics
+  - Different users on different hardware would report different "smoothness" for identical code
+
+**Polyfill implementation:**
+The current polyfill measures the actual refresh rate on page load using `requestAnimationFrame` sampling and uses that for frame expectations. This was necessary to avoid reporting false jank in throttled environments (where browsers run at ~32fps instead of 60fps).
+
+**Recommendation needed:**
+This decision affects the API design and should be resolved before standardization. Consider:
+- Are these metrics primarily for RUM (real user monitoring) where actual experience matters?
+- Or for lab testing where cross-device comparison is critical?
+- Should there be separate metrics for both approaches?
+- Could `framesExpected` include the target refresh rate as context?
