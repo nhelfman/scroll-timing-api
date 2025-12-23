@@ -1,7 +1,7 @@
 # scroll-timing-api
 Proposal for a performance API to help developers measure scroll performance.
 ## Demo
-Try out the API in action (pollyfill): [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
+Try out the API in action (polyfill): [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
 
 # Motivation
 Scroll is a very common user interaction in many web apps used for navigating content outside the available viewport or container.
@@ -168,7 +168,7 @@ observer.observe({ type: 'scroll', buffered: true });
 ```
 
 # Polyfill
-A polyfill implementation is provided to demonstrate the API usage patterns and enable experimentation before native browser support is available.
+A demonstration polyfill is provided to illustrate the API usage patterns and enable experimentation before native browser support is available.
 
 See [polyfill.js](polyfill.js) for the full implementation.
 
@@ -177,4 +177,4 @@ See [polyfill.js](polyfill.js) for the full implementation.
 <script src="polyfill.js"></script>
 ```
 
-This polyfill provides a basic implementation demonstrating the API usage patterns. Note that a production polyfill would need additional work to accurately measure checkerboarding and handle edge cases across different browsers and input methods.
+**Note:** This polyfill uses heuristics-based approximations due to the lack of relevant native APIs required for accurate scroll performance measurement. It is intended for demonstration and prototyping purposes only. Metrics like checkerboarding detection and precise frame timing cannot be accurately measured without browser-level instrumentation. A native implementation would have access to compositor data, rendering pipeline information, and other internal metrics not exposed to JavaScript.
