@@ -1159,7 +1159,8 @@
         const ms = Number(els.jankMs.value) || 0;
         if (ms > 0) busyLoop(ms);
       }
-      addEventListener('scroll', onScrollJank, { passive: true });
+      // Use capture: true to catch scroll events from nested scrollers too
+      addEventListener('scroll', onScrollJank, { passive: true, capture: true });
 
       updateStats();
       renderLog();

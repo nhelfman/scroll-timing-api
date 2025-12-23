@@ -7,6 +7,52 @@
   const inputHints = new WeakMap();
   let lastInputHint = null;
 
+  // Measure display refresh rate
+  let estimatedRefreshRate = 60; // Default fallback
+  let measuringRefreshRate = false;
+
+  function measureRefreshRate() {
+    if (measuringRefreshRate) return;
+    measuringRefreshRate = true;
+
+    const samples = [];
+    let lastTimestamp = null;
+    let sampleCount = 0;
+    const maxSamples = 60; // Sample for ~1 second
+
+    function sample(timestamp) {
+      if (lastTimestamp !== null) {
+        const delta = timestamp - lastTimestamp;
+        if (delta > 0 && delta < 100) { // Sanity check: between 10fps and 1000fps
+          samples.push(delta);
+        }
+      }
+      lastTimestamp = timestamp;
+      sampleCount++;
+
+      if (sampleCount < maxSamples) {
+        requestAnimationFrame(sample);
+      } else {
+        // Calculate median frame time to avoid outliers
+        if (samples.length > 10) {
+          samples.sort((a, b) => a - b);
+          const median = samples[Math.floor(samples.length / 2)];
+          estimatedRefreshRate = 1000 / median;
+        }
+        measuringRefreshRate = false;
+      }
+    }
+
+    requestAnimationFrame(sample);
+  }
+
+  // Start measuring on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', measureRefreshRate);
+  } else {
+    measureRefreshRate();
+  }
+
   class PerformanceScrollTimingPolyfill {
     constructor(data) {
       this.entryType = 'scroll';
@@ -19,8 +65,8 @@
       this.framesProduced = data.framesProduced;
       this.framesDropped = data.framesExpected - data.framesProduced;
       this.scrollStartLatency = Math.max(0, this.firstFrameTime - this.startTime);
-      this.smoothnessScore = data.framesExpected > 0 
-        ? data.framesProduced / data.framesExpected 
+      this.smoothnessScore = data.framesExpected > 0
+        ? data.framesProduced / data.framesExpected
         : 1;
       this.checkerboardTime = data.checkerboardTime;
       this.checkerboardArea = 0; // Difficult to polyfill accurately
@@ -137,6 +183,7 @@
       this.frameCount = 0;
       this.expectedFrames = 0;
       this.lastFrameTime = null;
+      this.lastScrollEventTime = this.startTime;
       this.checkerboardTime = 0;
       this.rafId = null;
       this.timeoutId = null;
@@ -161,7 +208,8 @@
 
         this.frameCount++;
 
-        const targetFrameDuration = 1000 / 60; // Assuming 60fps target
+        // Track expected frames using measured refresh rate, not assumed 60fps
+        const targetFrameDuration = 1000 / estimatedRefreshRate;
         if (this.lastFrameTime === null) {
           this.expectedFrames += 1;
         } else {
@@ -180,6 +228,11 @@
       this.timeoutId = setTimeout(() => this.end(), 150);
     }
 
+    onScrollEvent() {
+      this.lastScrollEventTime = performance.now();
+      this.scheduleEnd();
+    }
+
     end() {
       if (this.ended) return;
       this.ended = true;
@@ -189,10 +242,12 @@
 
       const endTime = performance.now();
       const firstFrameTime = this.firstFrameTime ?? this.startTime;
+      const duration = endTime - this.startTime;
+
       const entry = new PerformanceScrollTimingPolyfill({
         startTime: this.startTime,
         firstFrameTime,
-        duration: endTime - this.startTime,
+        duration,
         framesExpected: this.expectedFrames,
         framesProduced: this.frameCount,
         checkerboardTime: this.checkerboardTime,
@@ -238,7 +293,7 @@
     if (state.source === 'unknown' && hintedSource) {
       state.source = hintedSource;
     }
-    state.scheduleEnd();
+    state.onScrollEvent();
   }
 
   // Detect scroll start/end for *any* scrollable element.
@@ -270,16 +325,16 @@
 
   // Extend PerformanceObserver
   const OriginalPerformanceObserver = window.PerformanceObserver;
-  
+
   window.PerformanceObserver = function(callback) {
     const observer = new OriginalPerformanceObserver(callback);
     const originalObserve = observer.observe.bind(observer);
-    
+
     observer.observe = function(options) {
       if (options.type === 'scroll' || options.entryTypes?.includes('scroll')) {
         scrollObservers.add({ callback, options });
       }
-      
+
       try {
         originalObserve(options);
       } catch (e) {
@@ -288,7 +343,7 @@
         if (!observingScroll) throw e;
       }
     };
-    
+
     const originalDisconnect = observer.disconnect.bind(observer);
     observer.disconnect = function() {
       scrollObservers.forEach(obs => {
@@ -296,7 +351,7 @@
       });
       originalDisconnect();
     };
-    
+
     return observer;
   };
 
