@@ -168,6 +168,49 @@ Checkerboarding breaks the illusion of scrolling through continuous content. It'
 - Large images without proper sizing hints
 - Lazy loading triggered too late
 
+## Scroll Velocity
+Scroll velocity measures the speed at which a user navigates through content, calculated as the distance scrolled divided by the duration of the scroll interaction.
+
+**Key metrics:**
+- **Scroll distance**: Total pixels scrolled during the interaction (`entry.scrollDistance`)
+- **Scroll duration**: Time from scroll start to scroll end (`entry.duration`)
+- **Average velocity**: `scrollDistance / duration` (pixels per millisecond, or multiply by 1000 for pixels per second)
+- **Peak velocity**: Maximum instantaneous scroll speed (requires sampling during interaction)
+
+**Why it matters:**
+Understanding scroll velocity is essential for performance optimization because different scroll speeds reveal different performance characteristics. Since PerformanceObserver reports entries asynchronously after scroll completion, velocity data is primarily used for telemetry, diagnostics, and informing optimization decisions rather than real-time adaptation.
+
+1. **Performance Issue Diagnosis**: Jank often correlates with scroll velocity. Telemetry may show that a page performs smoothly at low speeds but exhibits dropped frames at high velocities due to:
+   - Insufficient rasterization ahead of the scroll direction
+   - Paint operations that can't keep up with scroll speed
+   - Layout recalculations triggered by scroll position-dependent logic
+
+   By analyzing velocity alongside smoothness metrics in RUM data, developers can identify velocity thresholds where performance degrades and optimize accordingly.
+
+2. **User Intent Inference**: Scroll velocity provides context for interpreting other performance metrics:
+   - High velocity + high smoothness = well-optimized scrolling at scale
+   - High velocity + low smoothness = performance bottleneck under stress
+   - Low velocity + low smoothness = fundamental rendering issues even for gentle scrolling
+   - Very high velocity = user skimming or navigating, may not be engaging deeply with content
+
+   This helps prioritize which performance issues to address based on actual user behavior patterns.
+
+3. **Interaction Quality Scoring**: For metrics aggregation and percentile analysis, weighting by velocity helps identify the most impactful performance issues. A jank during a fast 5000px scroll (user actively navigating) may have different implications than jank during a tiny 50px adjustment. Velocity data allows developers to segment and analyze performance by scroll intensity.
+
+4. **Optimization Strategy Validation**: By collecting velocity-stratified performance data, developers can:
+   - Validate whether optimizations improve performance across all velocity ranges
+   - Identify if certain architectural decisions (lazy loading strategies, virtualization approaches, paint complexity) work well for typical scroll speeds but fail at extremes
+   - Make informed tradeoffs (e.g., "our current implementation handles 95% of scroll velocities smoothly")
+
+5. **Benchmarking and Regression Detection**: Velocity provides a standardized dimension for performance testing. Developers can establish performance baselines across velocity buckets (slow: <1000 px/s, medium: 1000-3000 px/s, fast: >3000 px/s) and detect regressions when new code degrades smoothness at specific velocity ranges.
+
+**Common velocity-related patterns:**
+- **Fling scrolls**: Touch flings on mobile often produce high initial velocity that decays over time (momentum scrolling)
+- **Keyboard/wheel scrolls**: Usually lower, more consistent velocity with discrete steps
+- **Programmatic scrolls**: Smooth scroll behavior produces predictable, constant velocity
+- **Search navigation**: Users jumping to search results often produce short-duration, high-velocity scrolls
+
+
 # Polyfill
 A demonstration polyfill is provided to illustrate the API usage patterns and enable experimentation before native browser support is available.
 
