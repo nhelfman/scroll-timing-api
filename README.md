@@ -1,7 +1,66 @@
 # scroll-timing-api
 Proposal for a performance API to help developers measure scroll performance.
-## Demo
-Try out the API in action (polyfill): [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
+
+### Demo
+Try out the API (polyfill) in action: [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
+
+# API Shape
+The Scroll Timing API extends the Performance Observer pattern, consistent with other performance APIs like Long Tasks, Layout Instability, and Event Timing.
+
+## `PerformanceScrollTiming` Interface
+
+```java
+interface PerformanceScrollTiming : PerformanceEntry {
+  readonly attribute DOMHighResTimeStamp startTime;
+  readonly attribute DOMHighResTimeStamp firstFrameTime;
+  readonly attribute DOMHighResTimeStamp endTime;
+  readonly attribute DOMHighResTimeStamp duration;
+  readonly attribute unsigned long framesExpected;
+  readonly attribute unsigned long framesProduced;
+  readonly attribute unsigned long framesDropped;
+  readonly attribute double checkerboardTime;
+  readonly attribute double checkerboardArea;
+  readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "other", "programmatic"
+  readonly attribute Element? target;
+};
+```
+
+## Usage with PerformanceObserver
+
+```javascript
+// Create an observer to capture scroll timing entries
+const observer = new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    // Derived metric.
+    const scrollStartLatency = Math.max(0, entry.firstFrameTime - entry.startTime);
+
+    // Not part of the native API shape; derived metric.
+    const smoothnessScore = entry.framesExpected > 0
+      ? entry.framesProduced / entry.framesExpected
+      : 1;
+
+    console.log('Scroll performance:', {
+      startTime: entry.startTime,
+      firstFrameTime: entry.firstFrameTime,
+      scrollStartLatency,
+      duration: entry.duration,
+      smoothnessScore,
+      droppedFrames: entry.framesDropped,
+      checkerboardTime: entry.checkerboardTime,
+      source: entry.scrollSource,
+      target: entry.target
+    });
+    
+    // Report to analytics
+    if (smoothnessScore < 0.9) {
+      reportScrollJank(entry);
+    }
+  }
+});
+
+// Start observing scroll timing entries
+observer.observe({ type: 'scroll', buffered: true });
+```
 
 # Motivation
 Scroll is a very common user interaction in many web apps used for navigating content outside the available viewport or container.
@@ -109,63 +168,7 @@ Checkerboarding breaks the illusion of scrolling through continuous content. It'
 - Large images without proper sizing hints
 - Lazy loading triggered too late
 
-# API Shape
-The Scroll Timing API extends the Performance Observer pattern, consistent with other performance APIs like Long Tasks, Layout Instability, and Event Timing.
 
-## PerformanceScrollTiming Interface
-
-```webidl
-interface PerformanceScrollTiming : PerformanceEntry {
-  readonly attribute DOMHighResTimeStamp startTime;
-  readonly attribute DOMHighResTimeStamp firstFrameTime;
-  readonly attribute DOMHighResTimeStamp endTime;
-  readonly attribute DOMHighResTimeStamp duration;
-  readonly attribute unsigned long framesExpected;
-  readonly attribute unsigned long framesProduced;
-  readonly attribute unsigned long framesDropped;
-  readonly attribute double checkerboardTime;
-  readonly attribute double checkerboardArea;
-  readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "programmatic"
-  readonly attribute Element? target;
-};
-```
-
-## Usage with PerformanceObserver
-
-```javascript
-// Create an observer to capture scroll timing entries
-const observer = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) {
-    // Derived metric.
-    const scrollStartLatency = Math.max(0, entry.firstFrameTime - entry.startTime);
-
-    // Not part of the native API shape; derived metric.
-    const smoothnessScore = entry.framesExpected > 0
-      ? entry.framesProduced / entry.framesExpected
-      : 1;
-
-    console.log('Scroll performance:', {
-      startTime: entry.startTime,
-      firstFrameTime: entry.firstFrameTime,
-      scrollStartLatency,
-      duration: entry.duration,
-      smoothnessScore,
-      droppedFrames: entry.framesDropped,
-      checkerboardTime: entry.checkerboardTime,
-      source: entry.scrollSource,
-      target: entry.target
-    });
-    
-    // Report to analytics
-    if (smoothnessScore < 0.9) {
-      reportScrollJank(entry);
-    }
-  }
-});
-
-// Start observing scroll timing entries
-observer.observe({ type: 'scroll', buffered: true });
-```
 
 # Polyfill
 A demonstration polyfill is provided to illustrate the API usage patterns and enable experimentation before native browser support is available.
