@@ -121,7 +121,7 @@ Scroll end time captures when a scroll interaction completes and the viewport se
 **Key metrics:**
 - **Last input timestamp**: The final scroll input event in a scroll sequence
 - **Settle timestamp**: When momentum/inertia scrolling completes and the viewport is stable
-- **Total scroll duration**: Time from scroll start to scroll settle
+- **Total scroll duration**: Time from scroll start to last input (or scroll settle if exists)
 
 **Why it matters:**
 Understanding scroll end time is essential for:
