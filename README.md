@@ -12,7 +12,6 @@ The Scroll Timing API extends the Performance Observer pattern, consistent with 
 interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute DOMHighResTimeStamp startTime;
   readonly attribute DOMHighResTimeStamp firstFrameTime;
-  readonly attribute DOMHighResTimeStamp endTime;
   readonly attribute DOMHighResTimeStamp duration;
   readonly attribute unsigned long framesExpected;
   readonly attribute unsigned long framesProduced;

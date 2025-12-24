@@ -60,7 +60,6 @@
       this.startTime = data.startTime;
       this.firstFrameTime = data.firstFrameTime;
       this.duration = data.duration;
-      this.endTime = data.startTime + data.duration;
       this.framesExpected = data.framesExpected;
       this.framesProduced = data.framesProduced;
       this.framesDropped = data.framesExpected - data.framesProduced;
