@@ -1,7 +1,6 @@
 # scroll-timing-api
-Proposal for a performance API to help developers measure scroll performance.
+Proposal for a web performance API to help developers measure scroll performance.
 
-### Demo
 Try out the API (polyfill) in action: [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
 
 # API Shape
@@ -20,6 +19,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
   readonly attribute double checkerboardArea;
+  readonly attribute unsigned long scrollDistance;
   readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "other", "programmatic"
   readonly attribute Element? target;
 };
@@ -168,8 +168,6 @@ Checkerboarding breaks the illusion of scrolling through continuous content. It'
 - Large images without proper sizing hints
 - Lazy loading triggered too late
 
-
-
 # Polyfill
 A demonstration polyfill is provided to illustrate the API usage patterns and enable experimentation before native browser support is available.
 
@@ -251,3 +249,6 @@ Alternatively, does this complexity make Option A (standardized 60fps baseline) 
 - Native browser implementations have direct access to compositor and display information, making refresh rate tracking more feasible than JavaScript-based measurement
 - However, the API specification should still be explicit about whether and when refresh rate is determined
 - This concern may influence whether Option A or Option B is ultimately chosen
+
+## Smoothness scoring options
+- TODO add content
