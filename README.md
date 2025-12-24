@@ -250,5 +250,104 @@ Alternatively, does this complexity make Option A (standardized 60fps baseline) 
 - However, the API specification should still be explicit about whether and when refresh rate is determined
 - This concern may influence whether Option A or Option B is ultimately chosen
 
-## Smoothness scoring options
-- TODO add content
+## Smoothness Scoring Options
+
+**Philosophy:** This API intentionally provides raw frame metrics (`framesExpected`, `framesProduced`, `framesDropped`) rather than a single "smoothness score." Different use cases may require different calculation methods, and prescribing a specific formula could limit flexibility or become outdated as best practices evolve.
+
+### Available Metrics for Smoothness Calculation
+
+The API provides these building blocks:
+- `framesExpected`: Frames that should have rendered at the target refresh rate
+- `framesProduced`: Frames actually rendered
+- `framesDropped`: Frames skipped (`framesExpected - framesProduced`)
+- `duration`: Total scroll duration in milliseconds
+
+### Calculation Options
+
+#### Option 1: Simple Ratio (Frame Throughput)
+
+**Formula:** `smoothness = framesProduced / framesExpected`
+
+- **Pros:** Simple, intuitive, easy to explain
+- **Cons:** Treats all dropped frames equally regardless of when they occur; doesn't capture variance in frame timing
+
+**Example:**
+```javascript
+const smoothness = entry.framesProduced / entry.framesExpected;
+// 54 frames produced out of 60 expected = 90% smoothness
+```
+
+#### Option 2: Harmonic Mean of Frame Rates
+
+**Formula:** `smoothness = n / (Σ(1/fps_i))` where `fps_i` is instantaneous FPS per frame
+
+The harmonic mean weights lower frame rates more heavily, better reflecting perceived smoothness. A single slow frame has a disproportionate impact on the final score.
+
+- **Pros:** Better reflects perceived smoothness; low frame rates impact the score more (matching human perception)
+- **Cons:** Requires per-frame timing data; more complex to compute
+
+**Example:**
+```javascript
+// If you have individual frame times [16ms, 16ms, 50ms, 16ms]
+// Frame rates: [62.5, 62.5, 20, 62.5]
+// Arithmetic mean: 51.9 FPS
+// Harmonic mean: 4 / (1/62.5 + 1/62.5 + 1/20 + 1/62.5) = 37.0 FPS
+// The harmonic mean better reflects the impact of that one slow frame
+```
+
+#### Option 3: RMS (Root Mean Square) of Frame Times
+
+**Formula:** `rms = √(Σ(frameTime_i²) / n)`
+
+RMS penalizes longer frames quadratically, making outlier frames (jank) more impactful in the final metric.
+
+- **Pros:** Properly penalizes long frames; mathematically simpler than percentile-based metrics; has a clear definition
+- **Cons:** Requires per-frame timing data; result is in milliseconds (needs comparison to target frame time)
+
+**Example:**
+```javascript
+// Frame times: [16ms, 16ms, 50ms, 16ms]
+// Arithmetic mean: 24.5ms
+// RMS: √((16² + 16² + 50² + 16²) / 4) = √(3268/4) = 28.6ms
+// Can derive smoothness: targetFrameTime / rms = 16 / 28.6 = 56%
+```
+
+### Open Question: Should the API Provide Pre-Calculated Smoothness?
+
+**Question:** Should `PerformanceScrollTiming` include a `smoothnessScore` property, or only expose raw metrics for developers to calculate their own?
+
+**Option A: Raw metrics only**
+- **Pros:**
+  - Developers choose the calculation method appropriate for their use case
+  - API remains flexible as best practices evolve
+  - Avoids debates about which formula is "correct"
+  - Smaller API surface
+- **Cons:**
+  - More work for developers; may lead to inconsistent implementations
+  - Harder to compare metrics across different sites/tools
+
+**Option B: Provide a default smoothness score**
+- **Pros:**
+  - Consistent metric across the ecosystem
+  - Easier adoption; works out of the box
+  - Can be optimized by browsers using internal data (compositor timing, vsync alignment)
+- **Cons:**
+  - Locks the API to a specific calculation method
+  - May not suit all use cases
+  - Harder to change once standardized
+
+**Option C: Provide both raw metrics and a standardized score**
+- **Pros:**
+  - Best of both worlds: consistency for simple use cases, flexibility for advanced users
+  - Allows ecosystem to converge on standardized score while enabling research
+- **Cons:**
+  - Larger API surface
+  - May cause confusion about which to use
+
+**Additional consideration:** If providing a pre-calculated score, should the API expose which calculation method was used, or allow developers to request a specific method (e.g., `{ smoothnessMethod: 'rms' }`)?
+
+### References
+
+- [Chrome Graphics Metrics Definitions](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/speed/graphics_metrics_definitions.md)
+- [Towards an Animation Smoothness Metric (web.dev)](https://web.dev/articles/smoothness)
+- [Chrome Rendering Benchmarks](https://www.chromium.org/developers/design-documents/rendering-benchmarks/)
