@@ -1149,9 +1149,15 @@
               const dist = Math.sqrt(dx * dx + dy * dy);
               const dur = e.duration || 0;
               const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
+              const scrollStartLatency = Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
+                ? Math.max(0, e.firstFrameTime - e.startTime)
+                : 0;
+              const smoothnessScore = e.smoothnessScore;
               const logData = e.toJSON ? e.toJSON() : e;
               console.log('PerformanceScrollTiming', logData);
-              console.log('  → calculated scrollVelocity:', velocity, 'px/s');
+              console.log('  → calculated scrollStartLatency:', scrollStartLatency.toFixed(2), 'ms');
+              console.log('  → calculated smoothnessScore:', smoothnessScore);
+              console.log('  → calculated scrollVelocity:', velocity.toFixed(2), 'px/s');
             } catch {
               console.log('PerformanceScrollTiming', e);
             }
@@ -1201,25 +1207,37 @@
 
       function exportJson() {
         const payload = entries.map((e) => {
-          if (e && typeof e.toJSON === 'function') return e.toJSON();
-          return {
+          const entry = e && typeof e.toJSON === 'function' ? e.toJSON() : {
             entryType: e.entryType,
             name: e.name,
             startTime: e.startTime,
             firstFrameTime: e.firstFrameTime,
-            scrollStartLatency: Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
-              ? Math.max(0, e.firstFrameTime - e.startTime)
-              : undefined,
             duration: e.duration,
             framesExpected: e.framesExpected,
             framesProduced: e.framesProduced,
             framesDropped: e.framesDropped,
-            smoothnessScore: e.smoothnessScore,
             checkerboardTime: e.checkerboardTime,
             checkerboardAreaMax: e.checkerboardAreaMax,
             scrollSource: e.scrollSource,
             distanceX: e.distanceX,
             distanceY: e.distanceY,
+          };
+
+          // Add calculated fields
+          const dx = e.distanceX || 0;
+          const dy = e.distanceY || 0;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dur = e.duration || 0;
+
+          return {
+            ...entry,
+            calculated: {
+              scrollStartLatency: Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
+                ? Math.max(0, e.firstFrameTime - e.startTime)
+                : 0,
+              smoothnessScore: e.smoothnessScore,
+              scrollVelocity: dur > 0 ? (dist / dur) * 1000 : 0,
+            }
           };
         });
 
