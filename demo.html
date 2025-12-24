@@ -591,6 +591,27 @@
       .sticky { position: static; }
     }
 
+    /* Make the telemetry panel visually distinct from content */
+    .panel.sticky {
+      background: linear-gradient(135deg,
+        color-mix(in oklab, var(--accent) 8%, var(--panel)) 0%,
+        color-mix(in oklab, var(--panel) 95%, transparent) 100%);
+      border: 2px solid color-mix(in oklab, var(--accent) 35%, var(--border2));
+      box-shadow:
+        0 0 0 1px color-mix(in oklab, var(--accent) 12%, transparent),
+        0 16px 40px rgba(0,0,0,.4),
+        inset 0 1px 0 color-mix(in oklab, white 8%, transparent);
+    }
+
+    @media (prefers-color-scheme: light) {
+      .panel.sticky {
+        box-shadow:
+          0 0 0 1px color-mix(in oklab, var(--accent) 16%, transparent),
+          0 18px 40px rgba(16,24,40,.18),
+          inset 0 1px 0 color-mix(in oklab, white 35%, transparent);
+      }
+    }
+
     .footer-note {
       color: var(--muted);
       font-size: 12.5px;
