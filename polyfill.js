@@ -68,7 +68,7 @@
         ? data.framesProduced / data.framesExpected
         : 1;
       this.checkerboardTime = data.checkerboardTime;
-      this.checkerboardArea = 0; // Difficult to polyfill accurately
+      this.checkerboardAreaMax = 0; // Difficult to polyfill accurately
       this.scrollSource = data.scrollSource;
       this.target = data.target;
       this.distanceX = data.distanceX || 0;

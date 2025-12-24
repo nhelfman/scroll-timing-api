@@ -17,7 +17,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesProduced;
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
-  readonly attribute double checkerboardArea;
+  readonly attribute double checkerboardAreaMax;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "other", "programmatic"
@@ -160,8 +160,30 @@ Scroll checkerboarding occurs when content is not ready to be displayed as it sc
 
 **Key metrics:**
 - **Checkerboard time**: Total duration that unpainted areas were visible during scroll
-- **Checkerboard area**: Percentage of viewport affected by incomplete painting
+- **Checkerboard area max**: Maximum percentage of viewport affected by incomplete painting at any point during the scroll
 - **Checkerboard events**: Count of distinct checkerboarding occurrences
+
+### Checkerboard Area Calculation
+
+The `checkerboardAreaMax` attribute reports the **peak/maximum area** that was checkerboarded during the scroll interaction. This represents the worst-case user experience moment.
+
+**Why maximum rather than average?**
+- Shows the most severe user-visible issue, even if brief
+- Simple to track and understand: "at worst, X% was checkerboarded"
+- Useful for alerting on critical rendering failures
+- Developers can set thresholds: "if > 50% checkerboarding occurs, investigate"
+
+**Example scenario:**
+During a 500ms scroll, if checkerboarding occurs across multiple frames:
+- Frame 6: 15% of viewport checkerboarded
+- Frame 7: 40% of viewport checkerboarded
+- Frame 8: 60% of viewport checkerboarded (worst moment)
+- Frame 9: 25% of viewport checkerboarded
+- Frame 10: 10% of viewport checkerboarded
+
+Then `checkerboardAreaMax` would report `60` (the peak severity), while `checkerboardTime` would report the cumulative duration across all affected frames.
+
+**Note:** See the Open Questions section for discussion of alternative aggregation methods, including time-weighted averaging.
 
 **Why it matters:**
 Checkerboarding breaks the illusion of scrolling through continuous content. It's particularly problematic for:
@@ -398,6 +420,70 @@ RMS penalizes longer frames quadratically, making outlier frames (jank) more imp
   - May cause confusion about which to use
 
 **Additional consideration:** If providing a pre-calculated score, should the API expose which calculation method was used, or allow developers to request a specific method (e.g., `{ smoothnessMethod: 'rms' }`)?
+
+## Checkerboard Area Aggregation Method
+
+**Question:** Should `checkerboardAreaMax` (peak area) be the only metric, or should the API also provide time-weighted average checkerboard area?
+
+**Context:**
+Checkerboarding severity can vary frame-by-frame during a scroll interaction. Different aggregation methods capture different aspects of the user experience.
+
+**Current approach: `checkerboardAreaMax` (Peak/Maximum)**
+The API currently specifies `checkerboardAreaMax`, which reports the worst-case moment:
+
+**Pros:**
+- Simple to understand: "at worst, X% was checkerboarded"
+- Highlights severe issues even if brief
+- Easy to implement: just track maximum value
+- Clear threshold-based alerting: "if > 50%, investigate"
+
+**Cons:**
+- Doesn't capture how typical the problem was
+- A single bad frame gets same weight as sustained checkerboarding
+- No information about duration at each severity level
+
+**Alternative: Time-weighted average checkerboard area**
+Calculate average area weighted by frame duration: `Σ(area_i × duration_i) / checkerboardTime`
+
+**Example:**
+During a scroll with checkerboarding:
+- Frame 6 (16ms): 15% checkerboarded
+- Frame 7 (16ms): 40% checkerboarded
+- Frame 8 (16ms): 60% checkerboarded
+- Frame 9 (32ms): 25% checkerboarded (longer frame)
+- Frame 10 (16ms): 10% checkerboarded
+
+- `checkerboardAreaMax`: **60%** (worst moment)
+- Time-weighted average: **(15×16 + 40×16 + 60×16 + 25×32 + 10×16) / 96 = 27.5%** (typical severity)
+
+**Pros of time-weighted average:**
+- More accurate representation of overall experience
+- Accounts for variable frame durations
+- Better for RUM analytics and aggregation
+- Pairs naturally with `checkerboardTime`: "96ms of checkerboarding averaging 27.5% severity"
+
+**Cons of time-weighted average:**
+- More complex to calculate
+- Less intuitive than peak value
+- May undervalue brief but severe checkerboarding
+
+**Options for API design:**
+
+**Option A: Keep only `checkerboardAreaMax`** (current approach)
+- Simpler API surface
+- Sufficient for most use cases (alerting on severe issues)
+
+**Option B: Add `checkerboardAreaAvg` alongside `checkerboardAreaMax`**
+- Provides both perspectives: severity and typicality
+- More complete data for analysis
+- Larger API surface
+
+**Option C: Replace with `checkerboardAreaAvg` only**
+- More accurate representation of overall quality
+- Better for analytics
+- Loses worst-case visibility
+
+**Recommendation needed:** Should the API expose both metrics, or is `checkerboardAreaMax` sufficient for identifying and diagnosing checkerboarding issues?
 
 ### References
 
