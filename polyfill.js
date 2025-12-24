@@ -72,6 +72,7 @@
       this.checkerboardArea = 0; // Difficult to polyfill accurately
       this.scrollSource = data.scrollSource;
       this.target = data.target;
+      this.scrollDistance = data.scrollDistance || 0;
     }
 
     toJSON() {
@@ -85,7 +86,8 @@
         smoothnessScore: this.smoothnessScore,
         framesDropped: this.framesDropped,
         scrollSource: this.scrollSource,
-        target: this.target
+        target: this.target,
+        scrollDistance: this.scrollDistance
       };
     }
   }
@@ -188,6 +190,9 @@
       this.rafId = null;
       this.timeoutId = null;
       this.ended = false;
+      this.lastScrollTop = target.scrollTop || 0;
+      this.lastScrollLeft = target.scrollLeft || 0;
+      this.cumulativeDistance = 0;
     }
 
     start() {
@@ -230,6 +235,16 @@
 
     onScrollEvent() {
       this.lastScrollEventTime = performance.now();
+
+      // Track cumulative scroll distance
+      const currentScrollTop = this.target.scrollTop || 0;
+      const currentScrollLeft = this.target.scrollLeft || 0;
+      const deltaY = Math.abs(currentScrollTop - this.lastScrollTop);
+      const deltaX = Math.abs(currentScrollLeft - this.lastScrollLeft);
+      this.cumulativeDistance += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      this.lastScrollTop = currentScrollTop;
+      this.lastScrollLeft = currentScrollLeft;
+
       this.scheduleEnd();
     }
 
@@ -252,7 +267,8 @@
         framesProduced: this.frameCount,
         checkerboardTime: this.checkerboardTime,
         scrollSource: this.source,
-        target: this.target
+        target: this.target,
+        scrollDistance: this.cumulativeDistance
       });
 
       scrollObservers.forEach(observer => {

@@ -144,7 +144,7 @@
 
     @media (min-width: 980px) {
       .wrap {
-        grid-template-columns: 420px 1fr;
+        grid-template-columns: 520px 1fr;
         align-items: start;
       }
     }
@@ -655,6 +655,14 @@
             <div class="label">Dropped frames (sum)</div>
             <div class="value" id="sumDropped">—</div>
           </div>
+          <div class="kv">
+            <div class="label">Avg velocity</div>
+            <div class="value" id="avgVelocity">—</div>
+          </div>
+          <div class="kv">
+            <div class="label">Avg distance</div>
+            <div class="value" id="avgDistance">—</div>
+          </div>
         </div>
 
         <div class="controls">
@@ -705,13 +713,14 @@
                     <th style="width: 50px;">#</th>
                     <th style="width: 110px;">smooth</th>
                     <th style="width: 88px;">duration</th>
+                    <th style="width: 88px;">velocity</th>
                     <th style="width: 84px;">dropped</th>
                     <th style="width: 90px;">source</th>
                     <th>details</th>
                   </tr>
                 </thead>
                 <tbody id="logBody">
-                  <tr><td colspan="6" style="color: var(--muted); font-family: var(--sans);">Start observing, then scroll this page.</td></tr>
+                  <tr><td colspan="7" style="color: var(--muted); font-family: var(--sans);">Start observing, then scroll this page.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -826,6 +835,8 @@
         avgSmoothness: document.getElementById('avgSmoothness'),
         p75Smoothness: document.getElementById('p75Smoothness'),
         sumDropped: document.getElementById('sumDropped'),
+        avgVelocity: document.getElementById('avgVelocity'),
+        avgDistance: document.getElementById('avgDistance'),
         logBody: document.getElementById('logBody'),
 
         startBtn: document.getElementById('startBtn'),
@@ -907,6 +918,16 @@
       function fmtPct01(n) {
         if (!Number.isFinite(n)) return '—';
         return `${(n * 100).toFixed(1)}%`;
+      }
+
+      function fmtPx(n) {
+        if (!Number.isFinite(n)) return '—';
+        return `${Math.round(n)}px`;
+      }
+
+      function fmtVelocity(n) {
+        if (!Number.isFinite(n)) return '—';
+        return `${Math.round(n)}px/s`;
       }
 
       function percentile(values, p) {
@@ -1017,6 +1038,8 @@
           els.avgSmoothness.textContent = '—';
           els.p75Smoothness.textContent = '—';
           els.sumDropped.textContent = '—';
+          els.avgVelocity.textContent = '—';
+          els.avgDistance.textContent = '—';
           setControlsState();
           return;
         }
@@ -1024,23 +1047,33 @@
         const durations = entries.map(e => e.duration).filter(Number.isFinite);
         const smoothness = entries.map(e => e.smoothnessScore).filter(Number.isFinite);
         const dropped = entries.map(e => e.framesDropped).filter(Number.isFinite);
+        const distances = entries.map(e => e.scrollDistance).filter(Number.isFinite);
+        const velocities = entries.map(e => {
+          const dist = e.scrollDistance || 0;
+          const dur = e.duration || 0;
+          return dur > 0 ? (dist / dur) * 1000 : 0;
+        }).filter(Number.isFinite);
 
         const avgDur = durations.reduce((a, b) => a + b, 0) / Math.max(1, durations.length);
         const avgSm = smoothness.reduce((a, b) => a + b, 0) / Math.max(1, smoothness.length);
         const p75Sm = percentile(smoothness, 75);
         const sumDr = dropped.reduce((a, b) => a + b, 0);
+        const avgDist = distances.reduce((a, b) => a + b, 0) / Math.max(1, distances.length);
+        const avgVel = velocities.reduce((a, b) => a + b, 0) / Math.max(1, velocities.length);
 
         els.avgDuration.textContent = fmtMs(avgDur);
         els.avgSmoothness.textContent = fmtPct01(avgSm);
         els.p75Smoothness.textContent = fmtPct01(p75Sm);
         els.sumDropped.textContent = String(sumDr);
+        els.avgVelocity.textContent = fmtVelocity(avgVel);
+        els.avgDistance.textContent = fmtPx(avgDist);
 
         setControlsState();
       }
 
       function renderLog() {
         if (!entries.length) {
-          els.logBody.innerHTML = '<tr><td colspan="6" style="color: var(--muted); font-family: var(--sans);">No entries yet. Start observing, then scroll.</td></tr>';
+          els.logBody.innerHTML = '<tr><td colspan="7" style="color: var(--muted); font-family: var(--sans);">No entries yet. Start observing, then scroll.</td></tr>';
           return;
         }
 
@@ -1050,6 +1083,10 @@
           const dotClass = cls === 'good' ? '' : (cls === 'warn' ? 'warn' : 'bad');
           const scoreTxt = fmtPct01(e.smoothnessScore);
           const durTxt = fmtMs(e.duration);
+          const dist = e.scrollDistance || 0;
+          const dur = e.duration || 0;
+          const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
+          const velTxt = fmtVelocity(velocity);
           const droppedTxt = Number.isFinite(e.framesDropped) ? String(e.framesDropped) : '—';
           const src = e.scrollSource || 'unknown';
           const detail = `${Number.isFinite(e.framesProduced) ? e.framesProduced : '—'}/${Number.isFinite(e.framesExpected) ? e.framesExpected : '—'} frames`;
@@ -1059,6 +1096,7 @@
               <td style="color: var(--muted);">${seq}</td>
               <td><span class="score"><span class="dot ${dotClass}"></span>${scoreTxt}</span></td>
               <td>${durTxt}</td>
+              <td>${velTxt}</td>
               <td>${droppedTxt}</td>
               <td>${escapeHtml(src)}</td>
               <td style="color: var(--muted); font-family: var(--sans);">${escapeHtml(detail)}</td>
@@ -1077,7 +1115,14 @@
 
           if (els.consoleToggle.checked) {
             try {
-              console.log('PerformanceScrollTiming', e.toJSON ? e.toJSON() : e);
+              const dist = e.scrollDistance || 0;
+              const dur = e.duration || 0;
+              const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
+              const logData = e.toJSON ? e.toJSON() : e;
+              console.log('PerformanceScrollTiming', {
+                ...logData,
+                scrollVelocity: velocity
+              });
             } catch {
               console.log('PerformanceScrollTiming', e);
             }
@@ -1145,6 +1190,7 @@
             checkerboardTime: e.checkerboardTime,
             checkerboardArea: e.checkerboardArea,
             scrollSource: e.scrollSource,
+            scrollDistance: e.scrollDistance,
           };
         });
 
