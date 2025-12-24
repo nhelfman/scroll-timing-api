@@ -18,7 +18,8 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
   readonly attribute double checkerboardArea;
-  readonly attribute unsigned long scrollDistance;
+  readonly attribute long distanceX;
+  readonly attribute long distanceY;
   readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "other", "programmatic"
   readonly attribute Element? target;
 };
@@ -38,6 +39,10 @@ const observer = new PerformanceObserver((list) => {
       ? entry.framesProduced / entry.framesExpected
       : 1;
 
+    // Calculate total distance and velocity from X/Y components
+    const totalDistance = Math.sqrt(entry.distanceX ** 2 + entry.distanceY ** 2);
+    const scrollVelocity = entry.duration > 0 ? (totalDistance / entry.duration) * 1000 : 0;
+
     console.log('Scroll performance:', {
       startTime: entry.startTime,
       firstFrameTime: entry.firstFrameTime,
@@ -46,10 +51,14 @@ const observer = new PerformanceObserver((list) => {
       smoothnessScore,
       droppedFrames: entry.framesDropped,
       checkerboardTime: entry.checkerboardTime,
+      distanceX: entry.distanceX,
+      distanceY: entry.distanceY,
+      totalDistance,
+      scrollVelocity,
       source: entry.scrollSource,
       target: entry.target
     });
-    
+
     // Report to analytics
     if (smoothnessScore < 0.9) {
       reportScrollJank(entry);
@@ -171,9 +180,11 @@ Checkerboarding breaks the illusion of scrolling through continuous content. It'
 Scroll velocity measures the speed at which a user navigates through content, calculated as the distance scrolled divided by the duration of the scroll interaction.
 
 **Key metrics:**
-- **Scroll distance**: Total pixels scrolled during the interaction (`entry.scrollDistance`)
+- **Scroll distance components**: Horizontal and vertical scroll distances (`entry.distanceX`, `entry.distanceY`)
+- **Total scroll distance**: Euclidean distance combining both axes: `√(distanceX² + distanceY²)`
 - **Scroll duration**: Time from scroll start to scroll end (`entry.duration`)
-- **Average velocity**: `scrollDistance / duration` (pixels per millisecond, or multiply by 1000 for pixels per second)
+- **Average velocity**: `totalDistance / duration` (pixels per millisecond, or multiply by 1000 for pixels per second)
+- **Directional velocity**: Calculate velocity separately for X and Y axes to understand scroll direction and bias
 - **Peak velocity**: Maximum instantaneous scroll speed (requires sampling during interaction)
 
 **Why it matters:**

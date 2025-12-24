@@ -1047,9 +1047,15 @@
         const durations = entries.map(e => e.duration).filter(Number.isFinite);
         const smoothness = entries.map(e => e.smoothnessScore).filter(Number.isFinite);
         const dropped = entries.map(e => e.framesDropped).filter(Number.isFinite);
-        const distances = entries.map(e => e.scrollDistance).filter(Number.isFinite);
+        const distances = entries.map(e => {
+          const dx = e.distanceX || 0;
+          const dy = e.distanceY || 0;
+          return Math.sqrt(dx * dx + dy * dy);
+        }).filter(Number.isFinite);
         const velocities = entries.map(e => {
-          const dist = e.scrollDistance || 0;
+          const dx = e.distanceX || 0;
+          const dy = e.distanceY || 0;
+          const dist = Math.sqrt(dx * dx + dy * dy);
           const dur = e.duration || 0;
           return dur > 0 ? (dist / dur) * 1000 : 0;
         }).filter(Number.isFinite);
@@ -1083,7 +1089,9 @@
           const dotClass = cls === 'good' ? '' : (cls === 'warn' ? 'warn' : 'bad');
           const scoreTxt = fmtPct01(e.smoothnessScore);
           const durTxt = fmtMs(e.duration);
-          const dist = e.scrollDistance || 0;
+          const dx = e.distanceX || 0;
+          const dy = e.distanceY || 0;
+          const dist = Math.sqrt(dx * dx + dy * dy);
           const dur = e.duration || 0;
           const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
           const velTxt = fmtVelocity(velocity);
@@ -1115,14 +1123,14 @@
 
           if (els.consoleToggle.checked) {
             try {
-              const dist = e.scrollDistance || 0;
+              const dx = e.distanceX || 0;
+              const dy = e.distanceY || 0;
+              const dist = Math.sqrt(dx * dx + dy * dy);
               const dur = e.duration || 0;
               const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
               const logData = e.toJSON ? e.toJSON() : e;
-              console.log('PerformanceScrollTiming', {
-                ...logData,
-                scrollVelocity: velocity
-              });
+              console.log('PerformanceScrollTiming', logData);
+              console.log('  → calculated scrollVelocity:', velocity, 'px/s');
             } catch {
               console.log('PerformanceScrollTiming', e);
             }
@@ -1189,7 +1197,8 @@
             checkerboardTime: e.checkerboardTime,
             checkerboardArea: e.checkerboardArea,
             scrollSource: e.scrollSource,
-            scrollDistance: e.scrollDistance,
+            distanceX: e.distanceX,
+            distanceY: e.distanceY,
           };
         });
 

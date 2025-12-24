@@ -71,7 +71,8 @@
       this.checkerboardArea = 0; // Difficult to polyfill accurately
       this.scrollSource = data.scrollSource;
       this.target = data.target;
-      this.scrollDistance = data.scrollDistance || 0;
+      this.distanceX = data.distanceX || 0;
+      this.distanceY = data.distanceY || 0;
     }
 
     toJSON() {
@@ -86,7 +87,8 @@
         framesDropped: this.framesDropped,
         scrollSource: this.scrollSource,
         target: this.target,
-        scrollDistance: this.scrollDistance
+        distanceX: this.distanceX,
+        distanceY: this.distanceY
       };
     }
   }
@@ -191,7 +193,8 @@
       this.ended = false;
       this.lastScrollTop = target.scrollTop || 0;
       this.lastScrollLeft = target.scrollLeft || 0;
-      this.cumulativeDistance = 0;
+      this.cumulativeDistanceX = 0;
+      this.cumulativeDistanceY = 0;
     }
 
     start() {
@@ -235,12 +238,13 @@
     onScrollEvent() {
       this.lastScrollEventTime = performance.now();
 
-      // Track cumulative scroll distance
+      // Track cumulative scroll distance in X and Y separately
       const currentScrollTop = this.target.scrollTop || 0;
       const currentScrollLeft = this.target.scrollLeft || 0;
-      const deltaY = Math.abs(currentScrollTop - this.lastScrollTop);
-      const deltaX = Math.abs(currentScrollLeft - this.lastScrollLeft);
-      this.cumulativeDistance += Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const deltaY = currentScrollTop - this.lastScrollTop;
+      const deltaX = currentScrollLeft - this.lastScrollLeft;
+      this.cumulativeDistanceX += deltaX;
+      this.cumulativeDistanceY += deltaY;
       this.lastScrollTop = currentScrollTop;
       this.lastScrollLeft = currentScrollLeft;
 
@@ -267,7 +271,8 @@
         checkerboardTime: this.checkerboardTime,
         scrollSource: this.source,
         target: this.target,
-        scrollDistance: this.cumulativeDistance
+        distanceX: this.cumulativeDistanceX,
+        distanceY: this.cumulativeDistanceY
       });
 
       scrollObservers.forEach(observer => {
