@@ -25,7 +25,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource;
-  readonly attribute Element? target;
+  readonly attribute Node? target;
 };
 ```
 
@@ -46,7 +46,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
 | `distanceX` | long | Horizontal scroll distance in pixels (positive = right, negative = left) |
 | `distanceY` | long | Vertical scroll distance in pixels (positive = down, negative = up) |
 | `scrollSource` | DOMString | Input method: `"touch"`, `"wheel"`, `"keyboard"`, `"other"`, or `"programmatic"` |
-| `target` | Element? | The scrolled element, or `null` for document scroll |
+| `target` | Node? | The scrolled node, or `null` if disconnected/in shadow DOM (consistent with Event Timing API) |
 
 **Possible derived metrics** (not part of the interface, can be calculated from attributes):
 - **Scroll start latency**: `firstFrameTime - startTime` — responsiveness of scroll initiation
@@ -60,10 +60,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
 // Create an observer to capture scroll timing entries
 const observer = new PerformanceObserver((list) => {
   for (const entry of list.getEntries()) {
-    // Derived metric.
     const scrollStartLatency = Math.max(0, entry.firstFrameTime - entry.startTime);
-
-    // Not part of the native API shape; derived metric.
     const smoothnessScore = entry.framesExpected > 0
       ? entry.framesProduced / entry.framesExpected
       : 1;
@@ -300,6 +297,43 @@ Scroll interactions can be interrupted or cancelled mid-stream. This section def
 
 **Entry emission timing:**
 Entries are emitted after the scroll interaction fully completes (including momentum, snap, and settle phases). Interrupted scrolls emit entries at the interruption point with metrics reflecting the partial interaction.
+
+## Edge Cases
+
+This section documents expected behavior for boundary conditions and unusual scenarios.
+
+**Very short scrolls (`framesExpected` = 0):**
+- If a scroll interaction completes within a single frame, `framesExpected` may be 0 or 1
+- Implementations should avoid division-by-zero when calculating smoothness: treat `framesExpected = 0` as 100% smooth
+- Short scrolls are still valid entries and should be emitted
+
+**Zero scroll distance:**
+- User attempts to scroll at a boundary (already at top/bottom)
+- `distanceX` and `distanceY` are both 0
+- Entry is still emitted (the interaction occurred, even if no visual change resulted)
+- Useful for detecting "frustrated scrolling" at boundaries
+
+**Overscroll and bounce effects:**
+- On platforms with overscroll (iOS rubber-banding, Android overscroll glow):
+  - `distanceX`/`distanceY` reflect the actual scroll position change, not the visual overscroll
+  - `duration` includes the bounce-back animation time
+  - Overscroll does not count as checkerboarding
+
+**Scroll-linked animations:**
+- If the page uses `scroll-timeline` or JavaScript scroll-linked animations:
+  - Performance of those animations is not directly captured by this API
+  - Frame metrics reflect the scroll's visual update, not dependent animations
+  - Consider using separate performance instrumentation for scroll-linked effects
+
+**Rapid repeated scrolls:**
+- Quick successive scroll gestures (e.g., rapid wheel clicks) may:
+  - Merge into a single entry if within the scroll-end detection window
+  - Emit separate entries if separated by sufficient idle time
+- Implementation defines the debounce/merge behavior
+
+**Disabled scrolling:**
+- If `overflow: hidden` prevents scrolling, no entry is emitted (no scroll occurred)
+- If JavaScript prevents default on scroll events, behavior is implementation-defined
 
 # Privacy and Security Considerations
 

@@ -163,7 +163,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource;  // "touch", "wheel", "keyboard", "other", "programmatic"
-  readonly attribute Element? target;
+  readonly attribute Node? target;
 };
 ```
 
