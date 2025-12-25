@@ -20,12 +20,35 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute double checkerboardAreaMax;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
-  readonly attribute DOMString scrollSource; // "touch", "wheel", "keyboard", "other", "programmatic"
+  readonly attribute DOMString scrollSource;
   readonly attribute Element? target;
 };
 ```
 
-## Usage with PerformanceObserver
+### Attribute Reference
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `startTime` | DOMHighResTimeStamp | Timestamp of the first input event that initiated the scroll |
+| `firstFrameTime` | DOMHighResTimeStamp | Timestamp when the first visual frame reflecting the scroll was presented |
+| `duration` | DOMHighResTimeStamp | Total scroll duration from start to last input (or scroll settle) |
+| `framesExpected` | unsigned long | Number of frames that should have rendered at the target refresh rate |
+| `framesProduced` | unsigned long | Number of frames actually rendered during the scroll |
+| `framesDropped` | unsigned long | Number of frames skipped or missed (`framesExpected - framesProduced`) |
+| `checkerboardTime` | double | Total duration (ms) that unpainted areas were visible during scroll |
+| `checkerboardAreaMax` | double | Peak percentage of viewport affected by incomplete painting |
+| `distanceX` | long | Horizontal scroll distance in pixels (positive = right, negative = left) |
+| `distanceY` | long | Vertical scroll distance in pixels (positive = down, negative = up) |
+| `scrollSource` | DOMString | Input method: `"touch"`, `"wheel"`, `"keyboard"`, `"other"`, or `"programmatic"` |
+| `target` | Element? | The scrolled element, or `null` for document scroll |
+
+**Possible derived metrics** (not part of the interface, can be calculated from attributes):
+- **Scroll start latency**: `firstFrameTime - startTime` — responsiveness of scroll initiation
+- **Smoothness score**: `framesProduced / framesExpected` — frame delivery consistency (1.0 = perfect)
+- **Total distance**: `√(distanceX² + distanceY²)` — Euclidean scroll distance
+- **Scroll velocity**: `totalDistance / duration * 1000` — scroll speed in pixels per second
+
+## Example Usage with PerformanceObserver
 
 ```javascript
 // Create an observer to capture scroll timing entries
