@@ -10,6 +10,10 @@ The Scroll Timing API extends the Performance Observer pattern, consistent with 
 
 ```java
 interface PerformanceScrollTiming : PerformanceEntry {
+  // Inherited from PerformanceEntry
+  readonly attribute DOMString entryType;  // Always "scroll"
+  readonly attribute DOMString name;       // Empty string
+
   readonly attribute DOMHighResTimeStamp startTime;
   readonly attribute DOMHighResTimeStamp firstFrameTime;
   readonly attribute DOMHighResTimeStamp duration;
@@ -29,9 +33,11 @@ interface PerformanceScrollTiming : PerformanceEntry {
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
+| `entryType` | DOMString | Always `"scroll"` (inherited from PerformanceEntry) |
+| `name` | DOMString | Empty string (inherited from PerformanceEntry) |
 | `startTime` | DOMHighResTimeStamp | Timestamp of the first input event that initiated the scroll |
 | `firstFrameTime` | DOMHighResTimeStamp | Timestamp when the first visual frame reflecting the scroll was presented |
-| `duration` | DOMHighResTimeStamp | Total scroll duration from start to last input (or scroll settle) |
+| `duration` | DOMHighResTimeStamp | Total scroll duration from `startTime` until scrolling stops (includes momentum/inertia) |
 | `framesExpected` | unsigned long | Number of frames that should have rendered at the target refresh rate |
 | `framesProduced` | unsigned long | Number of frames actually rendered during the scroll |
 | `framesDropped` | unsigned long | Number of frames skipped or missed (`framesExpected - framesProduced`) |
@@ -144,7 +150,7 @@ Scroll end time captures when a scroll interaction completes and the viewport se
 **Key metrics:**
 - **Last input timestamp**: The final scroll input event in a scroll sequence
 - **Settle timestamp**: When momentum/inertia scrolling completes and the viewport is stable
-- **Total scroll duration**: Time from scroll start to last input (or scroll settle if exists)
+- **Total scroll duration**: Time from scroll start until scrolling stops (includes momentum/inertia)
 
 **Why it matters:**
 Understanding scroll end time is essential for:
@@ -265,6 +271,78 @@ Understanding scroll velocity is essential for performance optimization because 
 - **Programmatic scrolls**: Smooth scroll behavior produces predictable, constant velocity
 - **Search navigation**: Users jumping to search results often produce short-duration, high-velocity scrolls
 
+## Scroll Interruption and Cancellation
+
+Scroll interactions can be interrupted or cancelled mid-stream. This section defines how `PerformanceScrollTiming` entries behave in these scenarios.
+
+**Scenarios:**
+
+1. **Touch lift during momentum**: User initiates a touch fling, then lifts finger. Momentum scrolling continues until friction stops it or the user touches again.
+   - The entry covers the entire interaction including momentum phase
+   - `duration` extends until scrolling stops (not when the finger lifts)
+
+2. **Programmatic interruption**: A `scrollTo()` or `scrollIntoView()` call interrupts an ongoing user scroll.
+   - The user-initiated scroll entry ends at the interruption point
+   - A separate entry with `scrollSource: "programmatic"` may be emitted for the programmatic scroll
+
+3. **Input source switch**: User starts scrolling with touch, then uses mouse wheel mid-scroll.
+   - The original entry ends when the new input source is detected
+   - A new entry begins for the new input source
+   - `scrollSource` reflects the initiating input for each entry
+
+4. **Scroll snap adjustment**: After user input ends, CSS scroll snapping moves the viewport to a snap point.
+   - Snap adjustment is considered part of the same scroll interaction
+   - `duration` includes the snap animation time
+
+5. **Boundary collision**: Scroll reaches container bounds and cannot continue.
+   - Entry ends naturally when scrolling stops at the boundary
+   - Overscroll/bounce effects (on supported platforms) are included in `duration`
+
+**Entry emission timing:**
+Entries are emitted after the scroll interaction fully completes (including momentum, snap, and settle phases). Interrupted scrolls emit entries at the interruption point with metrics reflecting the partial interaction.
+
+# Privacy and Security Considerations
+
+Performance APIs can expose information that may be used for fingerprinting or side-channel attacks. This section outlines the privacy and security implications of the Scroll Timing API.
+
+## Fingerprinting Concerns
+
+**Display refresh rate inference:**
+The `framesExpected` metric, combined with `duration`, can reveal the device's display refresh rate. For example:
+- `framesExpected: 60` over `duration: 1000ms` suggests a 60Hz display
+- `framesExpected: 120` over `duration: 1000ms` suggests a 120Hz display
+
+This adds a fingerprinting vector, though display refresh rate is already inferrable via `requestAnimationFrame` timing.
+
+**Hardware performance profiling:**
+Frame production patterns (`framesProduced`, `framesDropped`) may reveal information about device GPU capabilities, thermal state, or background load, potentially contributing to device fingerprinting.
+
+**Scroll behavior patterns:**
+Aggregated scroll metrics (velocity, distance, source) could theoretically be used to profile user behavior patterns, though this requires persistent observation across sessions.
+
+## Timing Attack Considerations
+
+**High-resolution timestamps:**
+The API uses `DOMHighResTimeStamp` for `startTime`, `firstFrameTime`, and `duration`. These are subject to the same timing mitigations applied to other Performance APIs (reduced precision, cross-origin isolation requirements).
+
+**Scroll start latency:**
+The `firstFrameTime - startTime` delta could potentially reveal main thread blocking time, which might leak information about JavaScript execution in certain contexts.
+
+## Cross-Origin Considerations
+
+**Nested iframes:**
+When scrolling occurs in a cross-origin iframe, the parent document should not receive `PerformanceScrollTiming` entries for that scroll. Each origin observes only its own scroll interactions.
+
+**`target` attribute:**
+The `target` attribute returns an `Element` reference. For cross-origin iframes, this would be `null` or restricted to prevent leaking DOM references across origins.
+
+## Mitigations
+
+Implementations should consider:
+- Applying timestamp precision reduction consistent with other Performance APIs
+- Respecting cross-origin isolation boundaries
+- Potentially gating detailed metrics behind permissions or secure contexts
+- Following existing precedents from Event Timing, Long Tasks, and Layout Instability APIs
 
 # Polyfill
 A demonstration polyfill is provided to illustrate the API usage patterns and enable experimentation before native browser support is available.
@@ -280,235 +358,21 @@ See [polyfill.js](polyfill.js) for the full implementation.
 
 # Open Questions
 
+For detailed discussion of these design decisions, see [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md).
+
 ## Refresh Rate Baseline for Frame Counting
-
-**Question:** Should the API calculate expected frames based on a standardized baseline (e.g., 60fps) or use the device's actual refresh rate?
-
-**Context:**
-- The `framesExpected` and `framesProduced` metrics aim to quantify scroll smoothness
-- Different approaches have different tradeoffs:
-
-**Option A: Standardized 60fps baseline**
-- **Pros:**
-  - Consistent metrics across all devices and refresh rates
-  - Easier to compare scroll performance between different hardware
-  - Simpler mental model: "90% smoothness" means the same thing everywhere
-  - Matches most existing performance tools and metrics
-- **Cons:**
-  - On high refresh rate displays (90Hz, 120Hz, 144Hz), smooth scrolling would appear to have "extra" frames and show >100% smoothness
-  - On throttled environments (30fps, 32fps), even perfectly smooth scrolling would show low smoothness scores (~50%)
-  - Doesn't reflect actual user experience on non-60Hz displays
-
-**Option B: Device actual refresh rate**
-- **Pros:**
-  - Accurately reflects whether frames are being dropped relative to what the display can show
-  - Better represents actual user experience on that specific device
-  - Works correctly in throttled scenarios (DevTools open, background tabs, power saving)
-- **Cons:**
-  - Metrics not directly comparable across devices (90% on 60Hz ≠ 90% on 120Hz in absolute terms)
-  - Adds complexity: developers need to know the refresh rate to interpret metrics
-  - Different users on different hardware would report different "smoothness" for identical code
-
-**Polyfill implementation:**
-The current polyfill measures the actual refresh rate on page load using `requestAnimationFrame` sampling and uses that for frame expectations. This was necessary to avoid reporting false jank in throttled environments (where browsers run at ~32fps instead of 60fps).
-
-**Recommendation needed:**
-This decision affects the API design and should be resolved before standardization. Consider:
-- Are these metrics primarily for RUM (real user monitoring) where actual experience matters?
-- Or for lab testing where cross-device comparison is critical?
-- Should there be separate metrics for both approaches?
-- Could `framesExpected` include the target refresh rate as context?
-
-### Related Concern: Dynamic Refresh Rates
-
-In addition to choosing between a standardized baseline or device refresh rate, there's a related consideration: **refresh rates are not static throughout a page's lifetime**.
-
-**Variable Refresh Rate (VRR) displays:**
-- Technologies like Adaptive Sync, FreeSync, and G-Sync allow displays to dynamically adjust refresh rates (typically 48-240Hz)
-- Refresh rate varies based on content, power state, GPU load, and application demands
-- Increasingly common in gaming laptops, high-end monitors, and mobile devices
-
-**Dynamic browser throttling:**
-- Opening/closing DevTools often changes rendering rate (e.g., 60fps → 32fps)
-- Tab backgrounding reduces to ~1fps or lower
-- Battery saver modes and power state changes affect rendering pipeline timing
-- Performance settings can be changed by users mid-session
-
-**Impact on API design:**
-
-If the API uses Option B (device actual refresh rate), how should it handle changes mid-session?
-- Should each `PerformanceScrollTiming` entry snapshot the refresh rate at scroll start?
-- Should browsers continuously track refresh rate changes during a scroll interaction?
-- If a fixed baseline is measured once, it becomes stale when throttling changes (leading to incorrect `framesExpected` and false jank reports)
-
-Alternatively, does this complexity make Option A (standardized 60fps baseline) more attractive, since it avoids the dynamic measurement problem entirely?
-
-**Considerations for implementation:**
-- Native browser implementations have direct access to compositor and display information, making refresh rate tracking more feasible than JavaScript-based measurement
-- However, the API specification should still be explicit about whether and when refresh rate is determined
-- This concern may influence whether Option A or Option B is ultimately chosen
+Should `framesExpected` use a standardized 60fps baseline (consistent across devices) or the device's actual refresh rate (accurate to user experience)? This also raises concerns about dynamic refresh rates (VRR displays, browser throttling).
 
 ## Smoothness Scoring Options
+Should the API provide a pre-calculated `smoothnessScore`, or only raw frame metrics for developers to calculate their own? Options include simple ratio, harmonic mean, or RMS-based calculations.
 
-**Philosophy:** This API intentionally provides raw frame metrics (`framesExpected`, `framesProduced`, `framesDropped`) rather than a single "smoothness score." Different use cases may require different calculation methods, and prescribing a specific formula could limit flexibility or become outdated as best practices evolve.
+## Checkerboard Area Aggregation
+Should the API expose only `checkerboardAreaMax` (peak severity), or also provide `checkerboardAreaAvg` (time-weighted average)?
 
-### Available Metrics for Smoothness Calculation
+## Scrollbar as a Distinct Scroll Source
+Should `"scrollbar"` be added as a distinct `scrollSource` value? This raises privacy concerns as no existing web API exposes scrollbar interaction.
 
-The API provides these building blocks:
-- `framesExpected`: Frames that should have rendered at the target refresh rate
-- `framesProduced`: Frames actually rendered
-- `framesDropped`: Frames skipped (`framesExpected - framesProduced`)
-- `duration`: Total scroll duration in milliseconds
-
-### Calculation Options
-
-#### Option 1: Simple Ratio (Frame Throughput)
-
-**Formula:** `smoothness = framesProduced / framesExpected`
-
-- **Pros:** Simple, intuitive, easy to explain
-- **Cons:** Treats all dropped frames equally regardless of when they occur; doesn't capture variance in frame timing
-
-**Example:**
-```javascript
-const smoothness = entry.framesProduced / entry.framesExpected;
-// 54 frames produced out of 60 expected = 90% smoothness
-```
-
-#### Option 2: Harmonic Mean of Frame Rates
-
-**Formula:** `smoothness = n / (Σ(1/fps_i))` where `fps_i` is instantaneous FPS per frame
-
-The harmonic mean weights lower frame rates more heavily, better reflecting perceived smoothness. A single slow frame has a disproportionate impact on the final score.
-
-- **Pros:** Better reflects perceived smoothness; low frame rates impact the score more (matching human perception)
-- **Cons:** Requires per-frame timing data; more complex to compute
-
-**Example:**
-```javascript
-// If you have individual frame times [16ms, 16ms, 50ms, 16ms]
-// Frame rates: [62.5, 62.5, 20, 62.5]
-// Arithmetic mean: 51.9 FPS
-// Harmonic mean: 4 / (1/62.5 + 1/62.5 + 1/20 + 1/62.5) = 37.0 FPS
-// The harmonic mean better reflects the impact of that one slow frame
-```
-
-#### Option 3: RMS (Root Mean Square) of Frame Times
-
-**Formula:** `rms = √(Σ(frameTime_i²) / n)`
-
-RMS penalizes longer frames quadratically, making outlier frames (jank) more impactful in the final metric.
-
-- **Pros:** Properly penalizes long frames; mathematically simpler than percentile-based metrics; has a clear definition
-- **Cons:** Requires per-frame timing data; result is in milliseconds (needs comparison to target frame time)
-
-**Example:**
-```javascript
-// Frame times: [16ms, 16ms, 50ms, 16ms]
-// Arithmetic mean: 24.5ms
-// RMS: √((16² + 16² + 50² + 16²) / 4) = √(3268/4) = 28.6ms
-// Can derive smoothness: targetFrameTime / rms = 16 / 28.6 = 56%
-```
-
-### Open Question: Should the API Provide Pre-Calculated Smoothness?
-
-**Question:** Should `PerformanceScrollTiming` include a `smoothnessScore` property, or only expose raw metrics for developers to calculate their own?
-
-**Option A: Raw metrics only**
-- **Pros:**
-  - Developers choose the calculation method appropriate for their use case
-  - API remains flexible as best practices evolve
-  - Avoids debates about which formula is "correct"
-  - Smaller API surface
-- **Cons:**
-  - More work for developers; may lead to inconsistent implementations
-  - Harder to compare metrics across different sites/tools
-
-**Option B: Provide a default smoothness score**
-- **Pros:**
-  - Consistent metric across the ecosystem
-  - Easier adoption; works out of the box
-  - Can be optimized by browsers using internal data (compositor timing, vsync alignment)
-- **Cons:**
-  - Locks the API to a specific calculation method
-  - May not suit all use cases
-  - Harder to change once standardized
-
-**Option C: Provide both raw metrics and a standardized score**
-- **Pros:**
-  - Best of both worlds: consistency for simple use cases, flexibility for advanced users
-  - Allows ecosystem to converge on standardized score while enabling research
-- **Cons:**
-  - Larger API surface
-  - May cause confusion about which to use
-
-**Additional consideration:** If providing a pre-calculated score, should the API expose which calculation method was used, or allow developers to request a specific method (e.g., `{ smoothnessMethod: 'rms' }`)?
-
-## Checkerboard Area Aggregation Method
-
-**Question:** Should `checkerboardAreaMax` (peak area) be the only metric, or should the API also provide time-weighted average checkerboard area?
-
-**Context:**
-Checkerboarding severity can vary frame-by-frame during a scroll interaction. Different aggregation methods capture different aspects of the user experience.
-
-**Current approach: `checkerboardAreaMax` (Peak/Maximum)**
-The API currently specifies `checkerboardAreaMax`, which reports the worst-case moment:
-
-**Pros:**
-- Simple to understand: "at worst, X% was checkerboarded"
-- Highlights severe issues even if brief
-- Easy to implement: just track maximum value
-- Clear threshold-based alerting: "if > 50%, investigate"
-
-**Cons:**
-- Doesn't capture how typical the problem was
-- A single bad frame gets same weight as sustained checkerboarding
-- No information about duration at each severity level
-
-**Alternative: Time-weighted average checkerboard area**
-Calculate average area weighted by frame duration: `Σ(area_i × duration_i) / checkerboardTime`
-
-**Example:**
-During a scroll with checkerboarding:
-- Frame 6 (16ms): 15% checkerboarded
-- Frame 7 (16ms): 40% checkerboarded
-- Frame 8 (16ms): 60% checkerboarded
-- Frame 9 (32ms): 25% checkerboarded (longer frame)
-- Frame 10 (16ms): 10% checkerboarded
-
-- `checkerboardAreaMax`: **60%** (worst moment)
-- Time-weighted average: **(15×16 + 40×16 + 60×16 + 25×32 + 10×16) / 96 = 27.5%** (typical severity)
-
-**Pros of time-weighted average:**
-- More accurate representation of overall experience
-- Accounts for variable frame durations
-- Better for RUM analytics and aggregation
-- Pairs naturally with `checkerboardTime`: "96ms of checkerboarding averaging 27.5% severity"
-
-**Cons of time-weighted average:**
-- More complex to calculate
-- Less intuitive than peak value
-- May undervalue brief but severe checkerboarding
-
-**Options for API design:**
-
-**Option A: Keep only `checkerboardAreaMax`** (current approach)
-- Simpler API surface
-- Sufficient for most use cases (alerting on severe issues)
-
-**Option B: Add `checkerboardAreaAvg` alongside `checkerboardAreaMax`**
-- Provides both perspectives: severity and typicality
-- More complete data for analysis
-- Larger API surface
-
-**Option C: Replace with `checkerboardAreaAvg` only**
-- More accurate representation of overall quality
-- Better for analytics
-- Loses worst-case visibility
-
-**Recommendation needed:** Should the API expose both metrics, or is `checkerboardAreaMax` sufficient for identifying and diagnosing checkerboarding issues?
-
-### References
+## References
 
 - [Chrome Graphics Metrics Definitions](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/speed/graphics_metrics_definitions.md)
 - [Towards an Animation Smoothness Metric (web.dev)](https://web.dev/articles/smoothness)

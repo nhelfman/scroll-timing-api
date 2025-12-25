@@ -305,14 +305,14 @@
     let state = activeScrolls.get(scroller);
 
     if (!state) {
-      state = new ActiveScrollState(hintedSource || 'unknown', scroller, hintedTime);
+      state = new ActiveScrollState(hintedSource || 'other', scroller, hintedTime);
       activeScrolls.set(scroller, state);
       state.start();
       return;
     }
 
-    // If we started with unknown and got a fresh hint, upgrade the source.
-    if (state.source === 'unknown' && hintedSource) {
+    // If we started with 'other' (undetermined) and got a fresh hint, upgrade the source.
+    if (state.source === 'other' && hintedSource) {
       state.source = hintedSource;
     }
     state.onScrollEvent();

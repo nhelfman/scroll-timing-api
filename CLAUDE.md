@@ -68,7 +68,7 @@ The polyfill uses an IIFE pattern and implements the proposed API using availabl
 3. Associates hints with scroll events within a 250ms window
 4. Tracks frame production using `requestAnimationFrame` callbacks
 5. Ends scroll tracking after 150ms of inactivity
-6. Scroll source detection: "wheel", "touch", "keyboard", or "unknown" (falls back when no hint is available)
+6. Scroll source detection: "wheel", "touch", "keyboard", or "other" (falls back when no hint is available)
 
 **Key implementation details:**
 - `measureRefreshRate()`: Samples 60 frames on page load to calculate the median frame time and determine actual display refresh rate (fixes false jank detection in throttled environments)
@@ -142,7 +142,7 @@ A fully self-contained single-page application with:
 **API shape consistency:**
 - The polyfill attempts to match the WebIDL interface defined in README.md
 - `scrollStartLatency` is calculated in the polyfill but would ideally come from the browser in a native implementation
-- `checkerboardArea` is always 0 in the polyfill (cannot be accurately measured)
+- `checkerboardAreaMax` is always 0 in the polyfill (cannot be accurately measured)
 - See README.md "Open Questions" for unresolved design decisions:
   - **Refresh Rate Baseline**: Should `framesExpected` use standardized 60fps or device actual refresh rate? (Polyfill uses actual measured rate)
   - **Dynamic Refresh Rates**: How to handle VRR displays and browser throttling mid-session?
@@ -159,7 +159,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesProduced;
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
-  readonly attribute double checkerboardArea;
+  readonly attribute double checkerboardAreaMax;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource;  // "touch", "wheel", "keyboard", "other", "programmatic"
@@ -218,7 +218,7 @@ See README.md "Scroll Velocity" section for comprehensive discussion on telemetr
 The polyfill is intended for **demonstration and prototyping purposes only**. Key limitations:
 
 1. **Timing accuracy**: rAF timestamps and input event timestamps may use different clocks, leading to slight inaccuracies in `scrollStartLatency`
-2. **Checkerboarding**: Cannot detect checkerboarding (incomplete content painting) without browser internals; `checkerboardArea` always returns 0
+2. **Checkerboarding**: Cannot detect checkerboarding (incomplete content painting) without browser internals; `checkerboardAreaMax` always returns 0
 3. **Frame counting**: Uses heuristics based on rAF callbacks; may not perfectly match native compositor frame production
 4. **Scroll end detection**: Uses 150ms idle timeout heuristic; native implementations may use different signals
 5. **Refresh rate measurement**: Samples on page load only; doesn't adapt to mid-session throttling or VRR changes
