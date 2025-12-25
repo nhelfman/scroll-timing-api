@@ -108,7 +108,7 @@ Measuring scroll performance is critical because:
 
 5. **Framework and Library Support**: A standardized API allows UI frameworks, virtual scrolling libraries, and performance monitoring tools to provide consistent scroll performance insights.
 
-# Scroll Performance
+# Design Notes
 Scroll performance encompasses several measurable aspects that together determine the quality of the scrolling experience:
 
 - **Responsiveness**: How quickly the page responds when a user initiates a scroll gesture
