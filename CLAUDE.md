@@ -20,7 +20,8 @@ This repository contains a **proposal for a Scroll Timing Performance API** and 
 
 ```
 scroll-timing-api/
-├── README.md         # Full API proposal with motivation, metrics explanation, and API shape (~400 lines)
+├── README.md         # Full API proposal with motivation, API shape, and privacy considerations
+├── DESIGN_NOTES.md   # Detailed design rationale for scroll performance metrics
 ├── polyfill.js       # JavaScript polyfill implementation (~375 lines)
 └── demo.html         # Interactive demo page (~1255 lines, self-contained with polyfill)
 ```
@@ -92,6 +93,9 @@ The polyfill uses an IIFE pattern and implements the proposed API using availabl
 **Refresh rate handling:**
 The polyfill measures the actual display refresh rate on load to avoid false jank detection. For example, when DevTools is open, browsers often throttle to ~32fps. Using a hardcoded 60fps assumption would incorrectly report 50% smoothness for perfectly smooth scrolling. See the "Open Questions" section in README.md for discussion on whether the native API should use actual refresh rate or standardized 60fps.
 
+**Design rationale:**
+For comprehensive discussion of scroll performance concepts including scroll start time, smoothness, checkerboarding, velocity, interruption handling, and edge cases, see DESIGN_NOTES.md.
+
 ### Demo Page (demo.html)
 
 A fully self-contained single-page application with:
@@ -143,6 +147,7 @@ A fully self-contained single-page application with:
 - The polyfill attempts to match the WebIDL interface defined in README.md
 - `scrollStartLatency` is calculated in the polyfill but would ideally come from the browser in a native implementation
 - `checkerboardAreaMax` is always 0 in the polyfill (cannot be accurately measured)
+- See DESIGN_NOTES.md for detailed design rationale on scroll performance concepts
 - See README.md "Open Questions" for unresolved design decisions:
   - **Refresh Rate Baseline**: Should `framesExpected` use standardized 60fps or device actual refresh rate? (Polyfill uses actual measured rate)
   - **Dynamic Refresh Rates**: How to handle VRR displays and browser throttling mid-session?
@@ -211,7 +216,7 @@ Scroll velocity measures the speed at which a user navigates through content. Th
 - Programmatic scrolls: Predictable, constant velocity
 - Search navigation: Short-duration, high-velocity jumps
 
-See README.md "Scroll Velocity" section for comprehensive discussion on telemetry use cases, diagnostics, and optimization strategies.
+See DESIGN_NOTES.md for comprehensive discussion on scroll velocity, scroll start/end time, smoothness, checkerboarding, interruption handling, edge cases, and other scroll performance concepts.
 
 ### Polyfill Limitations
 
