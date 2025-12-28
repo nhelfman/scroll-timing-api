@@ -1,5 +1,8 @@
-# scroll-timing-api
-Proposal for a web performance API to help developers measure scroll performance.
+# Scroll Timing Performance API
+
+**A proposal to standardize scroll performance measurement on the web.**
+
+Scrolling is one of the most fundamental interactions on the web, yet developers lack a consistent, reliable way to measure its performance. The **Scroll Timing API** extends the Performance Observer pattern to expose critical scroll metrics — including responsiveness, smoothness, frame drops, checkerboarding, velocity, and scroll distance — enabling developers to monitor real-user scroll experiences, diagnose performance issues, and optimize for smooth, engaging interactions.
 
 Try out the API (polyfill) in action: [Demo Page](https://nhelfman.github.io/scroll-timing-api/demo.html)
 
