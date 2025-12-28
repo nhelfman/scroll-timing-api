@@ -196,4 +196,3 @@ Should `"scrollbar"` be added as a distinct `scrollSource` value? This raises pr
 
 - [Chrome Graphics Metrics Definitions](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/speed/graphics_metrics_definitions.md)
 - [Towards an Animation Smoothness Metric (web.dev)](https://web.dev/articles/smoothness)
-- [Chrome Rendering Benchmarks](https://www.chromium.org/developers/design-documents/rendering-benchmarks/)
