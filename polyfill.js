@@ -62,7 +62,6 @@
       this.duration = data.duration;
       this.framesExpected = data.framesExpected;
       this.framesProduced = data.framesProduced;
-      this.framesDropped = data.framesExpected - data.framesProduced;
       this.scrollStartLatency = Math.max(0, this.firstFrameTime - this.startTime);
       this.smoothnessScore = data.framesExpected > 0
         ? data.framesProduced / data.framesExpected
@@ -83,7 +82,6 @@
         duration: this.duration,
         framesExpected: this.framesExpected,
         framesProduced: this.framesProduced,
-        framesDropped: this.framesDropped,
         checkerboardTime: this.checkerboardTime,
         scrollSource: this.scrollSource,
         target: this.target,

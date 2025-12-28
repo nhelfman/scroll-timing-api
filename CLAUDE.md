@@ -163,7 +163,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute DOMHighResTimeStamp duration;
   readonly attribute unsigned long framesExpected;
   readonly attribute unsigned long framesProduced;
-  readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
@@ -185,7 +184,7 @@ const observer = new PerformanceObserver((list) => {
     console.log({
       scrollStartLatency,
       smoothness,
-      droppedFrames: entry.framesDropped,
+      framesDropped: entry.framesExpected - entry.framesProduced,
       distanceX: entry.distanceX,
       distanceY: entry.distanceY,
       totalDistance,

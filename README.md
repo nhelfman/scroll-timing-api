@@ -22,7 +22,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute DOMHighResTimeStamp duration;
   readonly attribute unsigned long framesExpected;
   readonly attribute unsigned long framesProduced;
-  readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
@@ -42,7 +41,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
 | `duration` | DOMHighResTimeStamp | Total scroll duration from `startTime` until scrolling stops (includes momentum/inertia) |
 | `framesExpected` | unsigned long | Number of frames that should have rendered at the target refresh rate |
 | `framesProduced` | unsigned long | Number of frames actually rendered during the scroll |
-| `framesDropped` | unsigned long | Number of frames skipped or missed (`framesExpected - framesProduced`) |
 | `checkerboardTime` | double | Total duration (ms) that unpainted areas were visible during scroll |
 | `distanceX` | long | Horizontal scroll distance in pixels (positive = right, negative = left) |
 | `distanceY` | long | Vertical scroll distance in pixels (positive = down, negative = up) |
@@ -52,6 +50,7 @@ interface PerformanceScrollTiming : PerformanceEntry {
 **Possible derived metrics** (not part of the interface, can be calculated from attributes):
 - **Scroll start latency**: `firstFrameTime - startTime` — responsiveness of scroll initiation
 - **Smoothness score**: `framesProduced / framesExpected` — frame delivery consistency (1.0 = perfect)
+- **Frames dropped**: `framesExpected - framesProduced` — number of frames skipped or missed
 - **Total distance**: `√(distanceX² + distanceY²)` — Euclidean scroll distance
 - **Scroll velocity**: `totalDistance / duration * 1000` — scroll speed in pixels per second
 
@@ -76,7 +75,7 @@ const observer = new PerformanceObserver((list) => {
       scrollStartLatency,
       duration: entry.duration,
       smoothnessScore,
-      droppedFrames: entry.framesDropped,
+      framesDropped: entry.framesExpected - entry.framesProduced,
       checkerboardTime: entry.checkerboardTime,
       distanceX: entry.distanceX,
       distanceY: entry.distanceY,
@@ -151,7 +150,7 @@ The `framesExpected` metric, combined with `duration`, can reveal the device's d
 This adds a fingerprinting vector, though display refresh rate is already inferrable via `requestAnimationFrame` timing.
 
 **Hardware performance profiling:**
-Frame production patterns (`framesProduced`, `framesDropped`) may reveal information about device GPU capabilities, thermal state, or background load, potentially contributing to device fingerprinting.
+Frame production patterns (`framesProduced` relative to `framesExpected`) may reveal information about device GPU capabilities, thermal state, or background load, potentially contributing to device fingerprinting.
 
 **Scroll behavior patterns:**
 Aggregated scroll metrics (velocity, distance, source) could theoretically be used to profile user behavior patterns, though this requires persistent observation across sessions.

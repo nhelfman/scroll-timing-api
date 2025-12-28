@@ -1067,7 +1067,11 @@
 
         const durations = entries.map(e => e.duration).filter(Number.isFinite);
         const smoothness = entries.map(e => e.smoothnessScore).filter(Number.isFinite);
-        const dropped = entries.map(e => e.framesDropped).filter(Number.isFinite);
+        const dropped = entries.map(e => {
+          const expected = e.framesExpected || 0;
+          const produced = e.framesProduced || 0;
+          return Math.max(0, expected - produced);
+        }).filter(Number.isFinite);
         const distances = entries.map(e => {
           const dx = e.distanceX || 0;
           const dy = e.distanceY || 0;
@@ -1116,7 +1120,10 @@
           const dur = e.duration || 0;
           const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
           const velTxt = fmtVelocity(velocity);
-          const droppedTxt = Number.isFinite(e.framesDropped) ? String(e.framesDropped) : '—';
+          const expected = e.framesExpected || 0;
+          const produced = e.framesProduced || 0;
+          const droppedFrames = Math.max(0, expected - produced);
+          const droppedTxt = String(droppedFrames);
           const src = e.scrollSource || 'unknown';
           const detail = `${Number.isFinite(e.framesProduced) ? e.framesProduced : '—'}/${Number.isFinite(e.framesExpected) ? e.framesExpected : '—'} frames`;
 
@@ -1215,7 +1222,6 @@
             duration: e.duration,
             framesExpected: e.framesExpected,
             framesProduced: e.framesProduced,
-            framesDropped: e.framesDropped,
             checkerboardTime: e.checkerboardTime,
             scrollSource: e.scrollSource,
             distanceX: e.distanceX,
