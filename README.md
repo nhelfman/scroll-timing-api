@@ -24,7 +24,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesProduced;
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
-  readonly attribute double checkerboardAreaMax;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource;
@@ -45,7 +44,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
 | `framesProduced` | unsigned long | Number of frames actually rendered during the scroll |
 | `framesDropped` | unsigned long | Number of frames skipped or missed (`framesExpected - framesProduced`) |
 | `checkerboardTime` | double | Total duration (ms) that unpainted areas were visible during scroll |
-| `checkerboardAreaMax` | double | Peak percentage of viewport affected by incomplete painting |
 | `distanceX` | long | Horizontal scroll distance in pixels (positive = right, negative = left) |
 | `distanceY` | long | Vertical scroll distance in pixels (positive = down, negative = up) |
 | `scrollSource` | DOMString | Input method: `"touch"`, `"wheel"`, `"keyboard"`, `"other"`, or `"programmatic"` |
@@ -191,9 +189,6 @@ Should `framesExpected` use a standardized 60fps baseline (consistent across dev
 
 ## Smoothness Scoring Options
 Should the API provide a pre-calculated `smoothnessScore`, or only raw frame metrics for developers to calculate their own? Options include simple ratio, harmonic mean, or RMS-based calculations.
-
-## Checkerboard Area Aggregation
-Should the API expose only `checkerboardAreaMax` (peak severity), or also provide `checkerboardAreaAvg` (time-weighted average)?
 
 ## Scrollbar as a Distinct Scroll Source
 Should `"scrollbar"` be added as a distinct `scrollSource` value? This raises privacy concerns as no existing web API exposes scrollbar interaction.

@@ -6,6 +6,7 @@ Scroll performance encompasses several measurable aspects that together determin
 - **Smoothness**: Whether frames are rendered consistently at the target frame rate during scrolling
 - **Visual Completeness**: Whether content is fully painted when it scrolls into view
 - **Stability**: Whether the scroll position remains predictable without unexpected jumps
+- **Velocity**: How fast the user is scrolling, which helps contextualize performance metrics
 
 ## Scroll Start Time
 Scroll start time measures the latency between the user's scroll input and the first visual update on screen.
@@ -72,32 +73,8 @@ Even if scroll starts quickly, dropped frames during scrolling create visible ja
 ## Scroll Checkerboarding
 Scroll checkerboarding occurs when content is not ready to be displayed as it scrolls into the viewport, resulting in blank or placeholder areas.
 
-**Key metrics:**
-- **Checkerboard time**: Total duration that unpainted areas were visible during scroll
-- **Checkerboard area max**: Maximum percentage of viewport affected by incomplete painting at any point during the scroll
-- **Checkerboard events**: Count of distinct checkerboarding occurrences
-
-### Checkerboard Area Calculation
-
-The `checkerboardAreaMax` attribute reports the **peak/maximum area** that was checkerboarded during the scroll interaction. This represents the worst-case user experience moment.
-
-**Why maximum rather than average?**
-- Shows the most severe user-visible issue, even if brief
-- Simple to track and understand: "at worst, X% was checkerboarded"
-- Useful for alerting on critical rendering failures
-- Developers can set thresholds: "if > 50% checkerboarding occurs, investigate"
-
-**Example scenario:**
-During a 500ms scroll, if checkerboarding occurs across multiple frames:
-- Frame 6: 15% of viewport checkerboarded
-- Frame 7: 40% of viewport checkerboarded
-- Frame 8: 60% of viewport checkerboarded (worst moment)
-- Frame 9: 25% of viewport checkerboarded
-- Frame 10: 10% of viewport checkerboarded
-
-Then `checkerboardAreaMax` would report `60` (the peak severity), while `checkerboardTime` would report the cumulative duration across all affected frames.
-
-**Note:** See the Open Questions section for discussion of alternative aggregation methods, including time-weighted averaging.
+**Key metric:**
+- **Checkerboard time**: Total duration (ms) that unpainted areas were visible during scroll
 
 **Why it matters:**
 Checkerboarding breaks the illusion of scrolling through continuous content. It's particularly problematic for:
@@ -111,6 +88,8 @@ Checkerboarding breaks the illusion of scrolling through continuous content. It'
 - Insufficient tile/layer rasterization ahead of scroll
 - Large images without proper sizing hints
 - Lazy loading triggered too late
+
+**Note:** The API currently includes `checkerboardTime` to measure the duration of checkerboarding. A potential future addition is a metric for checkerboard *area* (what percentage of the viewport was affected). See [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md#checkerboard-area-aggregation-method) for discussion of area aggregation approaches.
 
 ## Scroll Velocity
 Scroll velocity measures the speed at which a user navigates through content, calculated as the distance scrolled divided by the duration of the scroll interaction.

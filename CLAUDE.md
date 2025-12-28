@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains a **proposal for a Scroll Timing Performance API** and a demonstration polyfill implementation. The project aims to standardize how developers measure scroll performance metrics including smoothness, responsiveness, frame drops, and scroll velocity.
+This repository contains a **proposal for a Scroll Timing Performance API** and a demonstration polyfill implementation. The project aims to standardize how developers measure scroll performance metrics including smoothness, responsiveness, frame drops, checkerboarding, scroll velocity, and scroll distance.
 
 **Status:** This is a proposal with a working polyfill demonstration. The API is not yet standardized and is not available natively in any browser.
 
@@ -127,7 +127,7 @@ A fully self-contained single-page application with:
 
 **When modifying the polyfill:**
 - The polyfill measures actual refresh rate on page load (60 samples) - this is necessary to avoid false jank detection in throttled environments
-- The polyfill cannot accurately measure checkerboarding - this requires browser internals
+- The polyfill cannot accurately measure checkerboarding - this requires browser internals; `checkerboardTime` always returns 0
 - rAF timestamps may not perfectly align with input event timestamps (different clocks)
 - The 150ms scroll end timeout is heuristic-based and may not match native implementations
 - `smoothnessScore` is a polyfill convenience property - the native API would only expose raw frame counts
@@ -146,12 +146,13 @@ A fully self-contained single-page application with:
 **API shape consistency:**
 - The polyfill attempts to match the WebIDL interface defined in README.md
 - `scrollStartLatency` is calculated in the polyfill but would ideally come from the browser in a native implementation
-- `checkerboardAreaMax` is always 0 in the polyfill (cannot be accurately measured)
+- `checkerboardTime` is always 0 in the polyfill (cannot be accurately measured)
 - See DESIGN_NOTES.md for detailed design rationale on scroll performance concepts
 - See README.md "Open Questions" for unresolved design decisions:
   - **Refresh Rate Baseline**: Should `framesExpected` use standardized 60fps or device actual refresh rate? (Polyfill uses actual measured rate)
   - **Dynamic Refresh Rates**: How to handle VRR displays and browser throttling mid-session?
   - **Smoothness Scoring**: Should the API provide a pre-calculated smoothness score, or only raw metrics? Options include simple ratio, harmonic mean, or RMS approaches
+  - **Checkerboard Area Aggregation**: Should the API add a `checkerboardAreaMax` metric to measure severity, or also include time-weighted average?
 
 ## Proposed API Shape (from README.md)
 
@@ -164,7 +165,6 @@ interface PerformanceScrollTiming : PerformanceEntry {
   readonly attribute unsigned long framesProduced;
   readonly attribute unsigned long framesDropped;
   readonly attribute double checkerboardTime;
-  readonly attribute double checkerboardAreaMax;
   readonly attribute long distanceX;
   readonly attribute long distanceY;
   readonly attribute DOMString scrollSource;  // "touch", "wheel", "keyboard", "other", "programmatic"
@@ -223,7 +223,7 @@ See DESIGN_NOTES.md for comprehensive discussion on scroll velocity, scroll star
 The polyfill is intended for **demonstration and prototyping purposes only**. Key limitations:
 
 1. **Timing accuracy**: rAF timestamps and input event timestamps may use different clocks, leading to slight inaccuracies in `scrollStartLatency`
-2. **Checkerboarding**: Cannot detect checkerboarding (incomplete content painting) without browser internals; `checkerboardAreaMax` always returns 0
+2. **Checkerboarding**: Cannot detect checkerboarding (incomplete content painting) without browser internals; `checkerboardTime` always returns 0
 3. **Frame counting**: Uses heuristics based on rAF callbacks; may not perfectly match native compositor frame production
 4. **Scroll end detection**: Uses 150ms idle timeout heuristic; native implementations may use different signals
 5. **Refresh rate measurement**: Samples on page load only; doesn't adapt to mid-session throttling or VRR changes

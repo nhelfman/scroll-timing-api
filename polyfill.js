@@ -68,7 +68,6 @@
         ? data.framesProduced / data.framesExpected
         : 1;
       this.checkerboardTime = data.checkerboardTime;
-      this.checkerboardAreaMax = 0; // Difficult to polyfill accurately
       this.scrollSource = data.scrollSource;
       this.target = data.target;
       this.distanceX = data.distanceX || 0;
@@ -86,7 +85,6 @@
         framesProduced: this.framesProduced,
         framesDropped: this.framesDropped,
         checkerboardTime: this.checkerboardTime,
-        checkerboardAreaMax: this.checkerboardAreaMax,
         scrollSource: this.scrollSource,
         target: this.target,
         distanceX: this.distanceX,

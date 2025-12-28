@@ -168,13 +168,27 @@ RMS penalizes longer frames quadratically, making outlier frames (jank) more imp
 
 ## Checkerboard Area Aggregation Method
 
-**Question:** Should `checkerboardAreaMax` (peak area) be the only metric, or should the API also provide time-weighted average checkerboard area?
+**Question:** Should the API provide a `checkerboardAreaMax` metric (peak area), or also include a time-weighted average checkerboard area metric?
 
 **Context:**
-Checkerboarding severity can vary frame-by-frame during a scroll interaction. Different aggregation methods capture different aspects of the user experience.
+The API currently includes `checkerboardTime` to measure the total duration of checkerboarding. However, it doesn't capture the *severity* of checkerboarding — what percentage of the viewport was affected. Checkerboarding severity can vary frame-by-frame during a scroll interaction. Different aggregation methods capture different aspects of the user experience.
 
-**Current approach: `checkerboardAreaMax` (Peak/Maximum)**
-The API currently specifies `checkerboardAreaMax`, which reports the worst-case moment:
+**Option A: No area metric (current approach)**
+Only expose `checkerboardTime` without any area percentage metric.
+
+**Pros:**
+- Simpler API surface
+- Duration alone may be sufficient for detecting checkerboarding issues
+- Avoids complexity of area calculation and aggregation
+
+**Cons:**
+- Loses information about severity: 10% checkerboarding vs 90% checkerboarding are very different user experiences
+- Can't threshold on severity level ("alert if >50% of viewport is checkerboarded")
+- Less diagnostic value
+
+**Option B: Add `checkerboardAreaMax` (Peak/Maximum)**
+
+Reports the worst-case moment during the scroll:
 
 **Pros:**
 - Simple to understand: "at worst, X% was checkerboarded"
@@ -187,10 +201,34 @@ The API currently specifies `checkerboardAreaMax`, which reports the worst-case 
 - A single bad frame gets same weight as sustained checkerboarding
 - No information about duration at each severity level
 
-**Alternative: Time-weighted average checkerboard area**
+**Option C: Add `checkerboardAreaAvg` (Time-weighted average)**
+
 Calculate average area weighted by frame duration: `Σ(area_i × duration_i) / checkerboardTime`
 
-**Example:**
+**Pros:**
+- More accurate representation of overall experience
+- Accounts for variable frame durations
+- Better for RUM analytics and aggregation
+- Pairs naturally with `checkerboardTime`: "96ms of checkerboarding averaging 27.5% severity"
+
+**Cons:**
+- More complex to calculate
+- Less intuitive than peak value
+- May undervalue brief but severe checkerboarding
+
+**Option D: Provide both area metrics**
+
+Include both `checkerboardAreaMax` and `checkerboardAreaAvg` to capture both perspectives.
+
+**Pros:**
+- Most complete data for analysis
+- Supports both severity alerting (max) and quality scoring (avg)
+
+**Cons:**
+- Larger API surface
+- May cause confusion about which to use
+
+**Example scenario:**
 During a scroll with checkerboarding:
 - Frame 6 (16ms): 15% checkerboarded
 - Frame 7 (16ms): 40% checkerboarded
@@ -201,34 +239,8 @@ During a scroll with checkerboarding:
 - `checkerboardAreaMax`: **60%** (worst moment)
 - Time-weighted average: **(15×16 + 40×16 + 60×16 + 25×32 + 10×16) / 96 = 27.5%** (typical severity)
 
-**Pros of time-weighted average:**
-- More accurate representation of overall experience
-- Accounts for variable frame durations
-- Better for RUM analytics and aggregation
-- Pairs naturally with `checkerboardTime`: "96ms of checkerboarding averaging 27.5% severity"
-
-**Cons of time-weighted average:**
-- More complex to calculate
-- Less intuitive than peak value
-- May undervalue brief but severe checkerboarding
-
-**Options for API design:**
-
-**Option A: Keep only `checkerboardAreaMax`** (current approach)
-- Simpler API surface
-- Sufficient for most use cases (alerting on severe issues)
-
-**Option B: Add `checkerboardAreaAvg` alongside `checkerboardAreaMax`**
-- Provides both perspectives: severity and typicality
-- More complete data for analysis
-- Larger API surface
-
-**Option C: Replace with `checkerboardAreaAvg` only**
-- More accurate representation of overall quality
-- Better for analytics
-- Loses worst-case visibility
-
-**Recommendation needed:** Should the API expose both metrics, or is `checkerboardAreaMax` sufficient for identifying and diagnosing checkerboarding issues?
+**Recommendation needed:**
+Should the API add a checkerboard area metric? If so, which aggregation method should be used: peak only (`checkerboardAreaMax`), average only (`checkerboardAreaAvg`), both, or neither?
 
 ## Scrollbar as a Distinct Scroll Source
 
