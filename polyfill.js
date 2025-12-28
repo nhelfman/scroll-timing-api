@@ -22,18 +22,110 @@ const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 
 
 // === Module: Refresh Rate Measurement ===
 
-// Measure the display's actual refresh rate to avoid false jank detection.
-// This is critical because DevTools throttling or low-power modes can reduce
-// the effective refresh rate (e.g., to 32fps), and using a hardcoded 60fps
-// would incorrectly report dropped frames for perfectly smooth scrolling.
+// Dual measurement system:
+// 1. Web Worker measures baseline "ideal" refresh rate (unaffected by main thread jank)
+// 2. Main thread rAF tracks actual frame production during scrolling
 let estimatedRefreshRate = CONFIG.DEFAULT_REFRESH_RATE;
+let baselineRefreshRate = CONFIG.DEFAULT_REFRESH_RATE;
 let measuringRefreshRate = false;
+let refreshRateWorker = null;
 
 /**
- * Measures the display refresh rate by sampling frame deltas over ~1 second.
- * Uses median frame time to avoid outliers from initial jank or GC pauses.
+ * Creates a Web Worker that measures baseline refresh rate using requestAnimationFrame.
+ * Workers support rAF (tied to display vsync) and run independently of main thread blocking,
+ * providing a stable baseline even when the main thread is busy.
  */
-function measureRefreshRate() {
+function createRefreshRateWorker() {
+  const workerCode = `
+    const CONFIG = {
+      REFRESH_RATE_SAMPLES: 60,
+      MIN_SAMPLES_FOR_CALCULATION: 10,
+      FRAME_TIME_MIN_MS: 0,
+      FRAME_TIME_MAX_MS: 100
+    };
+
+    let frameDeltaSamples = [];
+    let lastTimestamp = null;
+    let sampleCount = 0;
+    let running = false;
+
+    function measureLoop(timestamp) {
+      if (!running) return;
+
+      if (lastTimestamp !== null) {
+        const delta = timestamp - lastTimestamp;
+        // Sanity check: only accept deltas between 10fps and 1000fps
+        if (delta > CONFIG.FRAME_TIME_MIN_MS && delta < CONFIG.FRAME_TIME_MAX_MS) {
+          frameDeltaSamples.push(delta);
+        }
+      }
+
+      lastTimestamp = timestamp;
+      sampleCount++;
+
+      if (sampleCount < CONFIG.REFRESH_RATE_SAMPLES) {
+        // Use requestAnimationFrame to measure display refresh rate
+        // Workers support rAF and it's tied to the display's actual vsync
+        requestAnimationFrame(measureLoop);
+      } else {
+        // Calculate median frame time to avoid outliers
+        if (frameDeltaSamples.length >= CONFIG.MIN_SAMPLES_FOR_CALCULATION) {
+          frameDeltaSamples.sort((a, b) => a - b);
+          const median = frameDeltaSamples[Math.floor(frameDeltaSamples.length / 2)];
+          const measuredRate = 1000 / median;
+
+          postMessage({
+            type: 'refreshRate',
+            rate: measuredRate,
+            samples: frameDeltaSamples.length
+          });
+        }
+        running = false;
+      }
+    }
+
+    self.addEventListener('message', (e) => {
+      if (e.data.type === 'start' && !running) {
+        running = true;
+        frameDeltaSamples = [];
+        lastTimestamp = null;
+        sampleCount = 0;
+        requestAnimationFrame(measureLoop);
+      }
+    });
+  `;
+
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  const workerUrl = URL.createObjectURL(blob);
+
+  try {
+    const worker = new Worker(workerUrl);
+
+    worker.addEventListener('message', (e) => {
+      if (e.data.type === 'refreshRate') {
+        baselineRefreshRate = e.data.rate;
+        console.log(`[ScrollTimingPolyfill] Worker measured baseline refresh rate: ${e.data.rate.toFixed(2)} Hz (${e.data.samples} samples)`);
+      }
+    });
+
+    worker.addEventListener('error', (e) => {
+      console.warn('[ScrollTimingPolyfill] Worker error:', e.message);
+    });
+
+    return worker;
+  } catch (error) {
+    console.warn('[ScrollTimingPolyfill] Failed to create worker:', error);
+    URL.revokeObjectURL(workerUrl);
+    return null;
+  }
+}
+
+/**
+ * Measures the main thread refresh rate using requestAnimationFrame.
+ * This represents the actual frame rate achievable on the main thread,
+ * which may be lower than the baseline due to main thread blocking.
+ */
+function measureMainThreadRefreshRate() {
   if (measuringRefreshRate) return;
   measuringRefreshRate = true;
 
@@ -60,12 +152,28 @@ function measureRefreshRate() {
         frameDeltaSamples.sort((a, b) => a - b);
         const median = frameDeltaSamples[Math.floor(frameDeltaSamples.length / 2)];
         estimatedRefreshRate = 1000 / median;
+        console.log(`[ScrollTimingPolyfill] Main thread measured refresh rate: ${estimatedRefreshRate.toFixed(2)} Hz (${frameDeltaSamples.length} samples)`);
       }
       measuringRefreshRate = false;
     }
   }
 
   requestAnimationFrame(sample);
+}
+
+/**
+ * Initializes both worker and main thread refresh rate measurements.
+ * The worker provides baseline, while main thread rAF provides actual achievable rate.
+ */
+function initializeRefreshRateMeasurement() {
+  // Start worker measurement for baseline
+  refreshRateWorker = createRefreshRateWorker();
+  if (refreshRateWorker) {
+    refreshRateWorker.postMessage({ type: 'start' });
+  }
+
+  // Start main thread measurement for actual rate
+  measureMainThreadRefreshRate();
 }
 
 // Refresh rate measurement initialization (will be called during polyfill initialization)
@@ -252,7 +360,10 @@ class ActiveScrollState {
 
   /**
    * Tracks frame production using requestAnimationFrame.
-   * Calculates expected frames based on measured refresh rate and actual frame deltas.
+   * Calculates expected frames based on main thread measured refresh rate and actual frame deltas.
+   * Note: Uses main thread rAF-measured rate (estimatedRefreshRate), which represents
+   * achievable frame rate on the main thread. The worker-measured baseline (baselineRefreshRate)
+   * provides comparison for detecting main thread interference.
    */
   trackFrames() {
     this.rafId = requestAnimationFrame((timestamp) => {
@@ -267,8 +378,9 @@ class ActiveScrollState {
 
       this.frameCount++;
 
-      // Track expected frames using measured refresh rate, not assumed 60fps.
+      // Track expected frames using main thread measured refresh rate (not assumed 60fps).
       // This delta-based approach accounts for actual time between frames.
+      // The main thread rate may differ from worker baseline if main thread is consistently blocked.
       const targetFrameDuration = 1000 / estimatedRefreshRate;
       if (this.lastFrameTime === null) {
         this.expectedFrames += 1;
@@ -482,11 +594,11 @@ class PerformanceScrollTimingPolyfill {
 
 // Only initialize polyfill if native implementation doesn't exist
 if (!('PerformanceScrollTiming' in window)) {
-  // Start refresh rate measurement
+  // Start dual refresh rate measurement (worker + main thread)
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', measureRefreshRate);
+    document.addEventListener('DOMContentLoaded', initializeRefreshRateMeasurement);
   } else {
-    measureRefreshRate();
+    initializeRefreshRateMeasurement();
   }
 
   // Attach event listeners for input source detection
