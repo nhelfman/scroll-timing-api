@@ -38,6 +38,7 @@
     }
 
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     html, body { height: 100%; }
     body {
       margin: 0;
@@ -623,7 +624,14 @@
     a:hover { text-decoration: underline; }
   </style>
 
-  <script type="module" src="polyfill.js"></script>
+  <script type="module">
+    // Only load polyfill if native PerformanceScrollTiming is not available
+    if (!('PerformanceScrollTiming' in window)) {
+      await import('./polyfill.js');
+    }
+    // Dispatch event to signal that the API is ready
+    window.dispatchEvent(new Event('scrollTimingAPIReady'));
+  </script>
 </head>
 <body>
   <div class="topbar">
@@ -946,6 +954,12 @@
         return `${Math.round(n)}px`;
       }
 
+      function calcSmoothnessScore(entry) {
+        const expected = entry.framesExpected || 0;
+        const produced = entry.framesProduced || 0;
+        return expected > 0 ? produced / expected : 1;
+      }
+
       function fmtVelocity(n) {
         if (!Number.isFinite(n)) return '—';
         return `${Math.round(n)}px/s`;
@@ -977,11 +991,20 @@
       addEventListener('scroll', updateScrollProgress, { passive: true });
       addEventListener('resize', updateScrollProgress, { passive: true });
 
-      // Identify implementation (native vs polyfill) heuristically.
-      const implName = (window.PerformanceScrollTiming && window.PerformanceScrollTiming.name) ? window.PerformanceScrollTiming.name : 'missing';
-      els.implText.textContent = implName === 'PerformanceScrollTimingPolyfill'
-        ? 'polyfill.js (demo)'
-        : (window.PerformanceScrollTiming ? `native (${implName || 'unknown'})` : 'not available');
+      // Function to update implementation text
+      function updateImplementationText() {
+        const implName = (window.PerformanceScrollTiming && window.PerformanceScrollTiming.name) ? window.PerformanceScrollTiming.name : 'missing';
+        els.implText.textContent = implName === 'PerformanceScrollTimingPolyfill'
+          ? 'polyfill.js (demo)'
+          : (window.PerformanceScrollTiming ? `native (${implName || 'unknown'})` : 'not available');
+      }
+
+      // Wait for the API to be ready before updating implementation text
+      addEventListener('scrollTimingAPIReady', updateImplementationText, { once: true });
+      // Also check immediately in case the event already fired
+      if (window.PerformanceScrollTiming) {
+        updateImplementationText();
+      }
 
       let observer = null;
       let entries = [];
@@ -1066,20 +1089,20 @@
         }
 
         const durations = entries.map(e => e.duration).filter(Number.isFinite);
-        const smoothness = entries.map(e => e.smoothnessScore).filter(Number.isFinite);
+        const smoothness = entries.map(e => calcSmoothnessScore(e)).filter(Number.isFinite);
         const dropped = entries.map(e => {
           const expected = e.framesExpected || 0;
           const produced = e.framesProduced || 0;
           return Math.max(0, expected - produced);
         }).filter(Number.isFinite);
         const distances = entries.map(e => {
-          const dx = e.distanceX || 0;
-          const dy = e.distanceY || 0;
+          const dx = e.deltaX || 0;
+          const dy = e.deltaY || 0;
           return Math.sqrt(dx * dx + dy * dy);
         }).filter(Number.isFinite);
         const velocities = entries.map(e => {
-          const dx = e.distanceX || 0;
-          const dy = e.distanceY || 0;
+          const dx = e.deltaX || 0;
+          const dy = e.deltaY || 0;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const dur = e.duration || 0;
           return dur > 0 ? (dist / dur) * 1000 : 0;
@@ -1110,12 +1133,13 @@
 
         const rows = entries.slice().reverse().map((e, i) => {
           const seq = entries.length - i;
-          const cls = scoreClass(e.smoothnessScore);
+          const smoothnessScore = calcSmoothnessScore(e);
+          const cls = scoreClass(smoothnessScore);
           const dotClass = cls === 'good' ? '' : (cls === 'warn' ? 'warn' : 'bad');
-          const scoreTxt = fmtPct01(e.smoothnessScore);
+          const scoreTxt = fmtPct01(smoothnessScore);
           const durTxt = fmtMs(e.duration);
-          const dx = e.distanceX || 0;
-          const dy = e.distanceY || 0;
+          const dx = e.deltaX || 0;
+          const dy = e.deltaY || 0;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const dur = e.duration || 0;
           const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
@@ -1151,15 +1175,15 @@
 
           if (els.consoleToggle.checked) {
             try {
-              const dx = e.distanceX || 0;
-              const dy = e.distanceY || 0;
+              const dx = e.deltaX || 0;
+              const dy = e.deltaY || 0;
               const dist = Math.sqrt(dx * dx + dy * dy);
               const dur = e.duration || 0;
               const velocity = dur > 0 ? (dist / dur) * 1000 : 0;
               const scrollStartLatency = Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
                 ? Math.max(0, e.firstFrameTime - e.startTime)
                 : 0;
-              const smoothnessScore = e.smoothnessScore;
+              const smoothnessScore = calcSmoothnessScore(e);
               const logData = e.toJSON ? e.toJSON() : e;
               console.log('PerformanceScrollTiming', logData);
               console.log('  → calculated scrollStartLatency:', scrollStartLatency.toFixed(2), 'ms');
@@ -1224,13 +1248,13 @@
             framesProduced: e.framesProduced,
             checkerboardTime: e.checkerboardTime,
             scrollSource: e.scrollSource,
-            distanceX: e.distanceX,
-            distanceY: e.distanceY,
+            deltaX: e.deltaX,
+            deltaY: e.deltaY,
           };
 
           // Add calculated fields
-          const dx = e.distanceX || 0;
-          const dy = e.distanceY || 0;
+          const dx = e.deltaX || 0;
+          const dy = e.deltaY || 0;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const dur = e.duration || 0;
 
@@ -1240,7 +1264,7 @@
               scrollStartLatency: Number.isFinite(e.firstFrameTime) && Number.isFinite(e.startTime)
                 ? Math.max(0, e.firstFrameTime - e.startTime)
                 : 0,
-              smoothnessScore: e.smoothnessScore,
+              smoothnessScore: calcSmoothnessScore(e),
               scrollVelocity: dur > 0 ? (dist / dur) * 1000 : 0,
             }
           };
@@ -1269,8 +1293,30 @@
       els.smoothScrollBtn.addEventListener('click', () => {
         const doc = document.documentElement;
         const max = Math.max(1, doc.scrollHeight - doc.clientHeight);
-        const target = Math.min(max, (doc.scrollTop || document.body.scrollTop) + Math.round(doc.clientHeight * 1.2));
-        window.scrollTo({ top: target, behavior: 'smooth' });
+        const currentScroll = doc.scrollTop || document.body.scrollTop;
+        const target = Math.min(max, currentScroll + Math.round(doc.clientHeight * 1.2));
+
+        // Use a manual smooth scroll for consistent behavior across browsers
+        const startTime = performance.now();
+        const duration = 500; // ms
+        const startScroll = currentScroll;
+        const distance = target - startScroll;
+
+        function easeOutCubic(t) {
+          return 1 - Math.pow(1 - t, 3);
+        }
+
+        function step(currentTime) {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const eased = easeOutCubic(progress);
+          window.scrollTo(0, startScroll + distance * eased);
+          if (progress < 1) {
+            requestAnimationFrame(step);
+          }
+        }
+
+        requestAnimationFrame(step);
       });
 
       // Jank simulation: busy-loop during scroll events.
